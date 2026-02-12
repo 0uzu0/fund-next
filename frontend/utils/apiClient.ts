@@ -12,8 +12,8 @@ interface CacheConfig {
 }
 
 // 请求选项
-interface RequestOptions extends Omit<RequestInit, 'signal'> {
-  cache?: CacheConfig;
+interface RequestOptions extends Omit<RequestInit, 'signal' | 'cache'> {
+  cache?: CacheConfig; // 自定义缓存配置（与 RequestInit.cache 不同）
   retry?: number; // 重试次数
   retryDelay?: number; // 重试延迟（毫秒）
   signal?: AbortSignal; // 支持 AbortSignal
@@ -69,11 +69,13 @@ function saveToCache(key: string, data: any, ttl: number): void {
  */
 function cleanExpiredCache(): void {
   const now = Date.now();
-  for (const [key, cached] of memoryCache.entries()) {
+  const keysToDelete: string[] = [];
+  memoryCache.forEach((cached, key) => {
     if (now - cached.timestamp > cached.ttl) {
-      memoryCache.delete(key);
+      keysToDelete.push(key);
     }
-  }
+  });
+  keysToDelete.forEach(key => memoryCache.delete(key));
 }
 
 // 定期清理过期缓存（每10分钟）
@@ -252,11 +254,13 @@ export function clearCache(pattern?: string): void {
     return;
   }
 
-  for (const key of memoryCache.keys()) {
+  const keysToDelete: string[] = [];
+  memoryCache.forEach((_, key) => {
     if (key.includes(pattern)) {
-      memoryCache.delete(key);
+      keysToDelete.push(key);
     }
-  }
+  });
+  keysToDelete.forEach(key => memoryCache.delete(key));
 }
 
 /**

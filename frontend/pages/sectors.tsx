@@ -179,13 +179,15 @@ function Sectors() {
     }
   };
 
-  const filteredCategories = sectorSearch.trim()
+  const filteredCategories: Record<string, string[]> = sectorSearch.trim()
     ? Object.fromEntries(
-        Object.entries(SECTOR_CATEGORIES).map(([cat, list]) => [
-          cat,
-          list.filter((s) => s.includes(sectorSearch.trim())),
-        ]).filter(([, list]) => list.length > 0)
-      )
+        Object.entries(SECTOR_CATEGORIES)
+          .map(([cat, list]) => [
+            cat,
+            list.filter((s: string) => s.includes(sectorSearch.trim())),
+          ] as [string, string[]])
+          .filter((entry): entry is [string, string[]] => entry[1].length > 0)
+      ) as Record<string, string[]>
     : SECTOR_CATEGORIES;
 
   if (!auth) {

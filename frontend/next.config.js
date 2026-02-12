@@ -14,9 +14,10 @@ const nextConfig = {
   },
   
   // 实验性功能：优化编译
-  experimental: {
-    optimizeCss: true, // 优化 CSS
-  },
+  // 注意：optimizeCss 需要安装 critters 包，且与静态导出不兼容，已禁用
+  // experimental: {
+  //   optimizeCss: true, // 优化 CSS
+  // },
   
   // 生产环境优化
   swcMinify: true, // 使用 SWC 压缩（更快）

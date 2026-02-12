@@ -1112,7 +1112,10 @@ export default function Portfolio() {
                     {(() => {
                       // 动态计算 padding（移动端更小）
                       const containerEl = chartSvgContainerRef.current;
-                      const isMobile = containerEl ? containerEl.clientWidth < 600 : chartWidth < 600;
+                      if (!containerEl) return null;
+                      // TypeScript 类型收窄：此时 containerEl 已确定不为 null
+                      const containerWidth = containerEl!.clientWidth;
+                      const isMobile = containerWidth < 600;
                       // 基础字体大小（固定，不受 SVG 缩放影响，因为使用 foreignObject）
                       const baseFontSize = isMobile ? 11 : 12; // 调大一号字体
                       // padding 需要为 Y 轴标题和 X 轴标签预留空间
@@ -1250,28 +1253,38 @@ export default function Portfolio() {
                             );
                           })}
                           {/* 悬停时：竖线 + 圆点 */}
-                          {chartHoverIndex !== null && n > 0 && (
-                            <>
-                              <line
-                                x1={n > 1 ? pad.left + (chartHoverIndex / (n - 1)) * w : pad.left + w / 2}
-                                y1={pad.top}
-                                x2={n > 1 ? pad.left + (chartHoverIndex / (n - 1)) * w : pad.left + w / 2}
-                                y2={pad.top + h}
-                                stroke="var(--accent)"
-                                strokeDasharray="3 3"
-                                strokeWidth={1}
-                                opacity={0.8}
-                              />
-                              <circle
-                                r={4}
-                                cx={n > 1 ? pad.left + (chartHoverIndex / (n - 1)) * w : pad.left + w / 2}
-                                cy={pad.top + h * (1 - (growth[chartHoverIndex] - minG) / range)}
-                                fill={growth[chartHoverIndex] > 0 ? 'var(--up-color)' : 'var(--down-color)'}
-                                stroke="var(--card-bg)"
-                                strokeWidth={2}
-                              />
-                            </>
-                          )}
+                          {(() => {
+                            const hoverIdx = chartHoverIndex;
+                            if (hoverIdx === null) return null;
+                            if (n === 0) return null;
+                            // TypeScript 类型收窄：此时 hoverIdx 已确定不为 null
+                            const idx = hoverIdx as number;
+                            if (idx < 0 || idx >= growth.length) {
+                              return null;
+                            }
+                            return (
+                              <>
+                                <line
+                                  x1={n > 1 ? pad.left + (idx / (n - 1)) * w : pad.left + w / 2}
+                                  y1={pad.top}
+                                  x2={n > 1 ? pad.left + (idx / (n - 1)) * w : pad.left + w / 2}
+                                  y2={pad.top + h}
+                                  stroke="var(--accent)"
+                                  strokeDasharray="3 3"
+                                  strokeWidth={1}
+                                  opacity={0.8}
+                                />
+                                <circle
+                                  r={4}
+                                  cx={n > 1 ? pad.left + (idx / (n - 1)) * w : pad.left + w / 2}
+                                  cy={pad.top + h * (1 - (growth[idx] - minG) / range)}
+                                  fill={growth[idx] > 0 ? 'var(--up-color)' : 'var(--down-color)'}
+                                  stroke="var(--card-bg)"
+                                  strokeWidth={2}
+                                />
+                              </>
+                            );
+                          })()}
                         </>
                       );
                     })()}
@@ -1281,12 +1294,14 @@ export default function Portfolio() {
                     const containerEl = chartSvgContainerRef.current;
                     const svgEl = chartSvgRef.current;
                     if (!containerEl || !svgEl) return null;
-                    const containerRect = containerEl.getBoundingClientRect();
-                    const svgRect = svgEl.getBoundingClientRect();
+                    // TypeScript 类型收窄：此时 containerEl 和 svgEl 已确定不为 null
+                    const containerRect = containerEl!.getBoundingClientRect();
+                    const svgRect = svgEl!.getBoundingClientRect();
                     if (svgRect.width === 0 || svgRect.height === 0) return null;
                     const scaleX = svgRect.width / chartWidth;
                     const scaleY = svgRect.height / chartHeight;
-                    const isMobile = containerEl.clientWidth < 600;
+                    const containerWidth = containerEl!.clientWidth;
+                    const isMobile = containerWidth < 600;
                     const baseFontSize = isMobile ? 11 : 12; // 调大一号字体
                     const pad = {
                       left: isMobile ? 40 : 52,
@@ -1425,48 +1440,64 @@ export default function Portfolio() {
                   </div>
                   )}
                   {/* Chart.js 已内置工具提示，不再需要自定义悬停提示框 */}
-                  {false && chartHoverIndex !== null && chartTooltipPos && chartData.labels[chartHoverIndex] != null && (
-                    <div
-                      className="fund-chart-tooltip"
-                      style={{
-                        position: 'absolute',
-                        left: chartTooltipPos.left,
-                        top: chartTooltipPos.top,
-                        transform: 'translate(-50%, -100%)',
-                        marginTop: -8,
-                        padding: '10px 14px',
-                        background: 'rgba(30, 30, 30, 0.95)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                        color: '#fff',
-                        minWidth: 120,
-                        zIndex: 10,
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      <div style={{ color: 'rgba(255,255,255,0.8)', marginBottom: 6, fontSize: 'var(--font-size-xs)' }}>
-                        时间: {chartData.labels[chartHoverIndex]}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: chartData.net_values?.[chartHoverIndex] != null ? 4 : 0 }}>
-                        <span style={{ 
-                          display: 'inline-block',
-                          width: 8,
-                          height: 8,
-                          backgroundColor: toNum(chartData.growth[chartHoverIndex]) >= 0 ? 'var(--up-color)' : 'var(--down-color)',
-                          borderRadius: 2,
-                        }}></span>
-                        <span style={{ color: toNum(chartData.growth[chartHoverIndex]) >= 0 ? 'var(--up-color)' : 'var(--down-color)', fontWeight: 600 }}>
-                          涨幅: {formatPct(chartData.growth[chartHoverIndex])}
-                        </span>
-                      </div>
-                      {chartData.net_values?.[chartHoverIndex] != null && (
-                        <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 'var(--font-size-xs)' }}>
-                          净值: {chartData.net_values[chartHoverIndex].toFixed(4)}
+                  {false && (() => {
+                    const hoverIdx = chartHoverIndex;
+                    const tooltipPos = chartTooltipPos;
+                    if (hoverIdx === null) return null;
+                    if (!tooltipPos) return null;
+                    // TypeScript 类型收窄：此时 hoverIdx 和 tooltipPos 已确定不为 null
+                    const idx = hoverIdx as number;
+                    const pos = tooltipPos as { left: number; top: number };
+                    if (idx < 0 || idx >= chartData.labels.length) return null;
+                    if (chartData.labels[idx] == null) return null;
+                    const netValues = chartData.net_values;
+                    const netValueAtIdx: number | undefined = netValues ? netValues![idx] : undefined;
+                    return (
+                      <div
+                        className="fund-chart-tooltip"
+                        style={{
+                          position: 'absolute',
+                          left: pos.left,
+                          top: pos.top,
+                          transform: 'translate(-50%, -100%)',
+                          marginTop: -8,
+                          padding: '10px 14px',
+                          background: 'rgba(30, 30, 30, 0.95)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                          color: '#fff',
+                          minWidth: 120,
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <div style={{ color: 'rgba(255,255,255,0.8)', marginBottom: 6, fontSize: 'var(--font-size-xs)' }}>
+                          时间: {chartData.labels[idx]}
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: netValueAtIdx != null ? 4 : 0 }}>
+                          <span style={{ 
+                            display: 'inline-block',
+                            width: 8,
+                            height: 8,
+                            backgroundColor: toNum(chartData.growth[idx]) >= 0 ? 'var(--up-color)' : 'var(--down-color)',
+                            borderRadius: 2,
+                          }}></span>
+                          <span style={{ color: toNum(chartData.growth[idx]) >= 0 ? 'var(--up-color)' : 'var(--down-color)', fontWeight: 600 }}>
+                            涨幅: {formatPct(chartData.growth[idx])}
+                          </span>
+                        </div>
+                        {netValueAtIdx != null && netValueAtIdx !== undefined && (() => {
+                          const value = netValueAtIdx!;
+                          return (
+                            <div style={{ color: 'rgba(255,255,255,0.8)', fontSize: 'var(--font-size-xs)' }}>
+                              净值: {value.toFixed(4)}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
                 </>
               ) : (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
