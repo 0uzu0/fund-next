@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, memo } from 'react';
+import { useEffect, useState, useRef, memo, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { apiGet } from '../utils/apiClient';
@@ -53,13 +53,22 @@ function Sidebar() {
     }, 0);
   }, []);
 
+  // 使用 useMemo 优化 active 状态的计算
+  const isActive = useMemo(() => {
+    return (href: string) => pathname === href;
+  }, [pathname]);
+
+  const isAdminActive = useMemo(() => {
+    return pathname === '/admin/users' || pathname === '/admin/profile';
+  }, [pathname]);
+
   return (
     <aside className="sidebar-nav">
       {ITEMS.map((item) => (
         <Link
           key={item.href}
           href={item.href}
-          className={`sidebar-icon ${pathname === item.href ? 'active' : ''}`}
+          className={`sidebar-icon ${isActive(item.href) ? 'active' : ''}`}
           title={item.label}
         >
           <span className="icon">{item.icon}</span>
@@ -68,7 +77,7 @@ function Sidebar() {
       {isAdmin && (
         <Link
           href="/admin/users"
-          className={`sidebar-icon ${pathname === '/admin/users' || pathname === '/admin/profile' ? 'active' : ''}`}
+          className={`sidebar-icon ${isAdminActive ? 'active' : ''}`}
           title="用户管理"
         >
           <span className="icon">👤</span>
@@ -78,4 +87,6 @@ function Sidebar() {
   );
 }
 
+// Sidebar 组件没有 props，memo 会自动处理内部状态变化
+// 由于 Sidebar 现在在 Layout 中，Layout 在 _app.tsx 中，所以不会在路由变化时重新挂载
 export default memo(Sidebar);

@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useMemo, useRef, startTransition, Sus
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { useChartData } from '../hooks/useChartData';
 import { apiGet, apiPost, apiPut, apiDelete, clearCache } from '../utils/apiClient';
 
@@ -917,10 +915,6 @@ export default function Portfolio() {
         <title>持仓基金 - LanFund</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <div className="portfolio-header">
             <h1>
               💼 持仓基金
@@ -2626,8 +2620,6 @@ export default function Portfolio() {
               </div>
             </div>
           )}
-        </div>
-      </div>
     </>
   );
 }

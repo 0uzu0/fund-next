@@ -2,8 +2,6 @@ import { useEffect, useState, memo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { apiGet } from '../utils/apiClient';
 
 // 动态导入图表组件，优化首屏加载
@@ -120,10 +118,6 @@ function MarketIndices() {
   return (
     <>
       <Head><title>市场指数 - LanFund</title></Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 15, marginBottom: 8 }}>
             📊 市场指数
             <button type="button" className="btn" style={{ background: 'var(--accent)', color: '#fff' }} onClick={refresh} disabled={loading || loadingChart}>
@@ -223,8 +217,6 @@ function MarketIndices() {
               )}
             </div>
           </div>
-        </div>
-      </div>
     </>
   );
 }

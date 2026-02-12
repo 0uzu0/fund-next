@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import TopNavbar from '../../components/TopNavbar';
-import Sidebar from '../../components/Sidebar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 function getApiBase() {
@@ -90,10 +88,6 @@ export default function AdminProfile() {
   return (
     <>
       <Head><title>修改管理员账号 - LanFund</title></Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <Link href="/admin/users" style={{ color: 'var(--accent)', marginBottom: 16, display: 'inline-block' }}>
             ← 返回用户管理
           </Link>
@@ -201,8 +195,6 @@ export default function AdminProfile() {
               </button>
             </form>
           </div>
-        </div>
-      </div>
     </>
   );
 }

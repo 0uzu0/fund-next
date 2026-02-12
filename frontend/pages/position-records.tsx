@@ -1,8 +1,6 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { apiGet, apiDelete } from '../utils/apiClient';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
@@ -81,12 +79,17 @@ function PositionRecords() {
 
   useEffect(() => {
     // 使用 API 客户端，带缓存（10分钟）
+    // 只在组件挂载时执行一次，避免路由变化时重复执行
     apiGet<{ username: string }>(getApiBase() + '/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)
-      .catch(() => router.replace('/login'));
-  }, [router]);
+      .catch(() => {
+        // 使用 router.push 而不是 router.replace，避免整页刷新
+        router.push('/login');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 空依赖数组，只在挂载时执行一次
 
   useEffect(() => {
     if (auth) fetchRecords();
@@ -123,16 +126,12 @@ function PositionRecords() {
       <Head>
         <title>持仓记录 - LanFund</title>
       </Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
-          <div className="page-header" style={{ marginBottom: 24 }}>
-            <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem', color: 'var(--text-main)' }}>📋 持仓记录</h1>
-            <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-dim)' }}>
-              每次加仓、减仓会在此记录；删除某条记录将撤销该次操作并恢复当时持仓。当日15:00前操作须在当日15:00前撤销，当日15:00后操作须在次日15:00前撤销；到账规则：当日15:00前操作次日到账(T+1)，当日15:00后操作第三天到账(T+2)。
-            </p>
-          </div>
+      <div className="page-header" style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: '0 0 8px', fontSize: '1.5rem', color: 'var(--text-main)' }}>📋 持仓记录</h1>
+        <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-dim)' }}>
+          每次加仓、减仓会在此记录；删除某条记录将撤销该次操作并恢复当时持仓。当日15:00前操作须在当日15:00前撤销，当日15:00后操作须在次日15:00前撤销；到账规则：当日15:00前操作次日到账(T+1)，当日15:00后操作第三天到账(T+2)。
+        </p>
+      </div>
 
           {loading && <p style={{ color: 'var(--text-dim)' }}>加载中…</p>}
           {error && <p style={{ color: 'var(--gh-danger-fg)' }}>{error}</p>}
@@ -189,8 +188,6 @@ function PositionRecords() {
               </table>
             </div>
           )}
-        </div>
-      </div>
     </>
   );
 }

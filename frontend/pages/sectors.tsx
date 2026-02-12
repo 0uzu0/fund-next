@@ -1,8 +1,6 @@
 import { useEffect, useState, memo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { apiGet, apiPost } from '../utils/apiClient';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
@@ -201,10 +199,6 @@ function Sectors() {
   return (
     <>
       <Head><title>行业板块 - LanFund</title></Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
             <button
               type="button"
@@ -450,8 +444,6 @@ function Sectors() {
               )}
             </>
           )}
-        </div>
-      </div>
     </>
   );
 }

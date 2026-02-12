@@ -2,8 +2,6 @@ import { useEffect, useState, useRef, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { apiGet } from '../utils/apiClient';
 import {
   Chart as ChartJS,
@@ -406,10 +404,6 @@ function PreciousMetals() {
   return (
     <>
       <Head><title>贵金属行情 - LanFund</title></Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 15, marginBottom: 8 }}>
             🥇 贵金属行情
             <button type="button" className="btn" style={{ background: 'var(--accent)', color: '#fff' }} onClick={refresh}>
@@ -499,8 +493,6 @@ function PreciousMetals() {
               )}
             </div>
           </div>
-        </div>
-      </div>
     </>
   );
 }

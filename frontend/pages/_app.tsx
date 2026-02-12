@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { useEffect } from 'react';
+import Layout from '../components/Layout';
 import '../styles/globals.css';
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -41,7 +42,9 @@ export default function App({ Component, pageProps }: AppProps) {
         {/* 性能优化：预连接 */}
         <link rel="preconnect" href={process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8311'} crossOrigin="anonymous" />
       </Head>
-      <Component {...pageProps} />
+      <Layout>
+        <Component {...pageProps} />
+      </Layout>
     </>
   );
 }

@@ -2,13 +2,7 @@ import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import TopNavbar from '../components/TopNavbar';
-import Sidebar from '../components/Sidebar';
 import { apiGet } from '../utils/apiClient';
-
-// 动态导入组件，优化首屏加载
-const TopNavbarLazy = dynamic(() => Promise.resolve(TopNavbar), { ssr: true });
-const SidebarLazy = dynamic(() => Promise.resolve(Sidebar), { ssr: true });
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -71,10 +65,6 @@ function Market() {
       <Head>
         <title>市场行情 - LanFund</title>
       </Head>
-      <TopNavbarLazy />
-      <div className="main-container">
-        <SidebarLazy />
-        <div className="content-area">
           <div style={{ marginBottom: 20 }}>
             <h1 style={{ margin: 0, fontSize: '1.5rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               📰 7*24快讯
@@ -167,8 +157,6 @@ function Market() {
               </table>
             )}
           </div>
-        </div>
-      </div>
     </>
   );
 }

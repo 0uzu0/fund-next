@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import TopNavbar from '../../components/TopNavbar';
-import Sidebar from '../../components/Sidebar';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 function getApiBase(): string {
@@ -133,10 +131,6 @@ export default function AdminUsers() {
   return (
     <>
       <Head><title>用户管理 - LanFund</title></Head>
-      <TopNavbar />
-      <div className="main-container">
-        <Sidebar />
-        <div className="content-area">
           <h1 style={{ marginBottom: 4 }}>用户管理</h1>
           <p style={{ color: 'var(--text-dim)', marginBottom: 24 }}>
             新增用户、查看与删除已有用户；
@@ -243,8 +237,6 @@ export default function AdminUsers() {
               )}
             </div>
           </div>
-        </div>
-      </div>
     </>
   );
 }
