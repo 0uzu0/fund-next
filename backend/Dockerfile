@@ -5,10 +5,13 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # 复制 package 文件
-COPY package*.json ./
+COPY package.json package-lock.json* ./
 
 # 安装依赖
-RUN npm ci --only=production
+# 使用 npm ci 进行确定性安装，如果失败则回退到 npm install
+RUN npm ci --only=production --no-audit --no-fund || \
+    (echo "npm ci failed, falling back to npm install" && \
+     npm install --only=production --no-audit --no-fund)
 
 # 复制应用代码
 COPY . .

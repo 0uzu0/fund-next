@@ -4,6 +4,7 @@ const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
+const compression = require('compression');
 
 const { initDb } = require('./db');
 const cache = require('./cache');
@@ -14,6 +15,19 @@ const chartDataScheduler = require('./services/chartDataScheduler');
 
 const PORT = process.env.PORT || 8311;
 const app = express();
+
+// 响应压缩（优化：减少传输大小）
+app.use(compression({
+  filter: (req, res) => {
+    // 只压缩 JSON 和文本响应
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  level: 6, // 压缩级别（1-9，6 是平衡性能和压缩率）
+  threshold: 1024, // 只压缩大于 1KB 的响应
+}));
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());

@@ -668,24 +668,39 @@ router.get('/api/fund/chart-data/preload', loginRequired, async (req, res) => {
     
     console.log(`[预加载API] 用户 ${userId} 有 ${holdingFunds.length} 只持仓基金`);
     
-    const chartDataMap = {};
+    if (holdingFunds.length === 0) {
+      return res.json({
+        success: true,
+        chart_data_map: {},
+      });
+    }
     
-    // 从数据库批量读取图表数据
+    // 优化：批量查询，一次性获取所有数据，而不是循环查询
+    const fundCodes = holdingFunds.map(f => f.fund_code);
+    const placeholders = fundCodes.map(() => '?').join(',');
+    
+    const cachedRows = db.prepare(
+      `SELECT fund_code, chart_data FROM fund_chart_data 
+       WHERE fund_code IN (${placeholders}) AND date = ?`
+    ).all(...fundCodes, today);
+    
+    // 创建基金代码到数据的映射
+    const chartDataMap = {};
+    const rowMap = new Map(cachedRows.map(row => [row.fund_code, row]));
+    
+    // 处理数据
     for (const fund of holdingFunds) {
-      const cachedRow = db.prepare(
-        `SELECT chart_data FROM fund_chart_data 
-         WHERE fund_code = ? AND date = ?`
-      ).get(fund.fund_code, today);
-      
+      const cachedRow = rowMap.get(fund.fund_code);
       if (cachedRow && cachedRow.chart_data) {
         try {
           const chart_data = JSON.parse(cachedRow.chart_data);
           // 确保数据格式正确：只包含 labels, growth, net_values
           if (chart_data.labels && chart_data.growth && chart_data.labels.length > 0) {
+            // 优化：压缩数据格式，减少传输大小
             chartDataMap[fund.fund_code] = {
-              labels: chart_data.labels || [],
-              growth: chart_data.growth || [],
-              net_values: chart_data.net_values || [],
+              l: chart_data.labels || [],      // labels 简写
+              g: chart_data.growth || [],      // growth 简写
+              n: chart_data.net_values || [], // net_values 简写
             };
           }
         } catch (e) {
@@ -695,6 +710,12 @@ router.get('/api/fund/chart-data/preload', loginRequired, async (req, res) => {
     }
     
     console.log(`[预加载API] 成功加载 ${Object.keys(chartDataMap).length} 只基金的图表数据`);
+    
+    // 设置缓存头
+    res.set({
+      'Cache-Control': 'private, max-age=300', // 5分钟缓存
+      'Content-Type': 'application/json',
+    });
     
     res.json({
       success: true,
@@ -733,8 +754,28 @@ router.get('/api/fund/chart-data', loginRequired, async (req, res) => {
     try {
       const chart_data = JSON.parse(cachedRow.chart_data);
       if (chart_data.labels && chart_data.labels.length > 0) {
+        // 优化：压缩数据格式，减少传输大小
+        const compressed = {
+          l: chart_data.labels || [],
+          g: chart_data.growth || [],
+          n: chart_data.net_values || [],
+        };
+        
+        // 设置缓存头
+        const etag = `"${code}-${todayStr}-${cachedRow.updated_at}"`;
+        res.set({
+          'Cache-Control': 'private, max-age=300', // 5分钟缓存
+          'ETag': etag,
+          'Content-Type': 'application/json',
+        });
+        
+        // 检查客户端缓存
+        if (req.headers['if-none-match'] === etag) {
+          return res.status(304).end();
+        }
+        
         return res.json({
-          chart_data,
+          chart_data: compressed,
           fund_info: { code, name: row.fund_name },
         });
       }
@@ -760,13 +801,25 @@ router.get('/api/fund/chart-data', loginRequired, async (req, res) => {
       }
     }
     
+    // 优化：压缩数据格式
+    const compressed = {
+      l: chart_data.labels || [],
+      g: chart_data.growth || [],
+      n: chart_data.net_values || [],
+    };
+    
+    res.set({
+      'Cache-Control': 'private, max-age=300',
+      'Content-Type': 'application/json',
+    });
+    
     res.json({
-      chart_data,
+      chart_data: compressed,
       fund_info: { code, name: row.fund_name },
     });
   } catch (e) {
     res.json({
-      chart_data: { labels: [], growth: [], net_values: [] },
+      chart_data: { l: [], g: [], n: [] },
       fund_info: { code, name: row.fund_name },
     });
   }

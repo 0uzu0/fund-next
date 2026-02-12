@@ -68,11 +68,18 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
         
         // 检查数据是否过期
         if (now - timestamp < DATA_EXPIRY_MS) {
-          const cachedData = JSON.parse(dataStr);
-          console.log('[sessionStorage] 从浏览器缓存加载', Object.keys(cachedData).length, '只基金的图表数据');
+          const compressedData = JSON.parse(dataStr);
+          console.log('[sessionStorage] 从浏览器缓存加载', Object.keys(compressedData).length, '只基金的图表数据');
           
-          // 存入内存缓存
-          Object.entries(cachedData).forEach(([code, chartData]: [string, any]) => {
+          // 解压缩数据格式
+          const cachedData: Record<string, ChartData> = {};
+          Object.entries(compressedData).forEach(([code, data]: [string, any]) => {
+            const chartData: ChartData = {
+              labels: data.l || data.labels || [],
+              growth: data.g || data.growth || [],
+              net_values: data.n || data.net_values,
+            };
+            cachedData[code] = chartData;
             chartDataCache.current.set(code, chartData);
           });
           
@@ -94,13 +101,24 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
     }
   }, []);
 
-  // 保存预加载数据到 sessionStorage
+  // 保存预加载数据到 sessionStorage（优化：压缩数据）
   const savePreloadDataToStorage = useCallback((dataMap: Record<string, ChartData>) => {
     if (typeof window === 'undefined') return;
     
     try {
       const timestamp = Date.now();
-      sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(dataMap));
+      // 优化：压缩数据格式，减少存储空间
+      const compressedData: Record<string, any> = {};
+      Object.entries(dataMap).forEach(([code, data]) => {
+        // 只保存必要字段，减少 JSON 大小
+        compressedData[code] = {
+          l: data.labels,      // labels 简写
+          g: data.growth,      // growth 简写
+          n: data.net_values,  // net_values 简写
+        };
+      });
+      
+      sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
       sessionStorage.setItem(CHART_DATA_TIMESTAMP_KEY, timestamp.toString());
       console.log('[sessionStorage] 已保存', Object.keys(dataMap).length, '只基金的图表数据到浏览器缓存');
     } catch (e) {
@@ -109,7 +127,16 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
       try {
         sessionStorage.removeItem(CHART_DATA_STORAGE_KEY);
         sessionStorage.removeItem(CHART_DATA_TIMESTAMP_KEY);
-        sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(dataMap));
+        // 再次尝试保存压缩数据
+        const compressedData: Record<string, any> = {};
+        Object.entries(dataMap).forEach(([code, data]) => {
+          compressedData[code] = {
+            l: data.labels,
+            g: data.growth,
+            n: data.net_values,
+          };
+        });
+        sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
         sessionStorage.setItem(CHART_DATA_TIMESTAMP_KEY, Date.now().toString());
       } catch (e2) {
         console.error('[sessionStorage] 无法保存数据，存储空间可能不足:', e2);
@@ -136,16 +163,25 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
         .then((data) => {
           if (data.success && data.chart_data_map) {
             console.log('[预加载] 成功加载', Object.keys(data.chart_data_map).length, '只基金的图表数据');
-            // 将预加载的数据存入缓存
-            Object.entries(data.chart_data_map).forEach(([code, chartData]: [string, any]) => {
+            
+            // 解压缩数据格式
+            const decompressedData: Record<string, ChartData> = {};
+            Object.entries(data.chart_data_map).forEach(([code, compressed]: [string, any]) => {
+              const chartData: ChartData = {
+                labels: compressed.l || compressed.labels || [],
+                growth: compressed.g || compressed.growth || [],
+                net_values: compressed.n || compressed.net_values,
+              };
+              decompressedData[code] = chartData;
               chartDataCache.current.set(code, chartData);
             });
+            
             // 更新预加载数据状态
             startTransition(() => {
-              setPreloadedChartData(data.chart_data_map || {});
+              setPreloadedChartData(decompressedData);
             });
-            // 保存到 sessionStorage
-            savePreloadDataToStorage(data.chart_data_map || {});
+            // 保存到 sessionStorage（会自动压缩）
+            savePreloadDataToStorage(decompressedData);
           } else {
             console.warn('[预加载] 返回数据格式不正确:', data);
           }
@@ -219,10 +255,12 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
             setTimeout(() => {
               if (abortController.signal.aborted) return;
               if (d.chart_data) {
+                // 解压缩数据格式
+                const compressed = d.chart_data;
                 const data: ChartData = {
-                  labels: d.chart_data.labels || [],
-                  growth: d.chart_data.growth || [],
-                  net_values: d.chart_data.net_values,
+                  labels: compressed.l || compressed.labels || [],
+                  growth: compressed.g || compressed.growth || [],
+                  net_values: compressed.n || compressed.net_values,
                 };
                 // 缓存数据
                 chartDataCache.current.set(code, data);
@@ -353,23 +391,28 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
           cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
         })
           .then((d) => {
-            if (d.chart_data && d.chart_data.labels && d.chart_data.labels.length > 0) {
+            if (d.chart_data) {
+              // 解压缩数据格式
+              const compressed = d.chart_data;
               const refreshedData: ChartData = {
-                labels: d.chart_data.labels || [],
-                growth: d.chart_data.growth || [],
-                net_values: d.chart_data.net_values || [],
+                labels: compressed.l || compressed.labels || [],
+                growth: compressed.g || compressed.growth || [],
+                net_values: compressed.n || compressed.net_values || [],
               };
-              // 更新缓存
-              chartDataCache.current.set(chartFund.code, refreshedData);
-              // 更新预加载数据状态
-              const updatedPreload = { ...preloadedChartData, [chartFund.code]: refreshedData };
-              // 使用 startTransition 更新，不阻塞UI
-              startTransition(() => {
-                setPreloadedChartData(updatedPreload);
-                setChartData(refreshedData);
-              });
-              // 同步更新 sessionStorage
-              savePreloadDataToStorage(updatedPreload);
+              
+              if (refreshedData.labels && refreshedData.labels.length > 0) {
+                // 更新缓存
+                chartDataCache.current.set(chartFund.code, refreshedData);
+                // 更新预加载数据状态
+                const updatedPreload = { ...preloadedChartData, [chartFund.code]: refreshedData };
+                // 使用 startTransition 更新，不阻塞UI
+                startTransition(() => {
+                  setPreloadedChartData(updatedPreload);
+                  setChartData(refreshedData);
+                });
+                // 同步更新 sessionStorage
+                savePreloadDataToStorage(updatedPreload);
+              }
             }
           })
           .catch(() => {});

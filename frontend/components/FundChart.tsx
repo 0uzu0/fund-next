@@ -49,28 +49,28 @@ function FundChart({ labels, growth, netValues }: FundChartProps) {
   }, [growth]);
 
   // 创建分段数据集（每个线段一个颜色）- 使用 useMemo 优化
+  // 优化：使用单个数据集配合 segment 函数，减少数据集数量
   const datasets = useMemo(() => {
-    const result = [];
-    for (let i = 0; i < growth.length - 1; i++) {
-      const color = growth[i + 1] >= 0 ? '#ff4d4f' : '#52c41a';
-      result.push({
-        label: '',
-        data: growth.map((val, idx) => (idx >= i && idx <= i + 1 ? val : null)),
-        borderColor: color,
-        backgroundColor: 'transparent',
-        borderWidth: 1,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        segment: {
-          borderColor: (ctx: any) => {
-            const idx = ctx.p1DataIndex;
-            return growth[idx] >= 0 ? '#ff4d4f' : '#52c41a';
-          },
-        },
-        spanGaps: false,
-      });
-    }
-    return result;
+    if (growth.length <= 1) return [];
+    
+    // 优化：只创建一个数据集，使用 segment 函数动态改变颜色
+    // 这样可以大幅减少数据集数量，提升渲染性能
+    return [{
+      label: '',
+      data: growth,
+      borderColor: (ctx: any) => {
+        const idx = ctx.p1DataIndex;
+        if (idx >= 0 && idx < growth.length) {
+          return growth[idx] >= 0 ? '#ff4d4f' : '#52c41a';
+        }
+        return '#ff4d4f';
+      },
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      spanGaps: false,
+    }];
   }, [growth]);
 
   // 填充区域数据集 - 涨幅用红色，跌幅用浅绿色 - 使用 useMemo 优化
@@ -115,6 +115,17 @@ function FundChart({ labels, growth, netValues }: FundChartProps) {
   const options = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    // 性能优化：减少动画和交互计算
+    animation: {
+      duration: 0, // 禁用动画，提升渲染速度
+    },
+    transitions: {
+      active: {
+        animation: {
+          duration: 0,
+        },
+      },
+    },
     interaction: {
       mode: 'index' as const,
       intersect: false,
