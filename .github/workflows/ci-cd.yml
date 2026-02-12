@@ -26,13 +26,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
-      - name: Install dependencies
+      - name: Cache backend dependencies
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: ${{ runner.os }}-backend-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-backend-
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-
+
+      - name: Install root dependencies
         run: |
+          if [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            echo "No root package-lock.json found, skipping root dependencies"
+          fi
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
           npm ci
-          cd backend && npm ci
-          cd ../frontend && npm ci
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
 
       - name: Run ESLint (Frontend)
         run: |
@@ -57,7 +84,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-
 
       - name: Install dependencies
         run: |
