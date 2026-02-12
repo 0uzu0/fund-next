@@ -37,6 +37,7 @@ type Summary = {
   todayEstChange: number;
   todayEstPct: number;
   todayActualText: string;
+  todayActual: number;
   cumulative: number;
 };
 
@@ -86,6 +87,7 @@ export default function Portfolio() {
     todayEstChange: 0,
     todayEstPct: 0,
     todayActualText: '净值未更新',
+    todayActual: 0,
     cumulative: 0,
   });
   const [fundList, setFundList] = useState<{ code: string; name: string }[]>([]);
@@ -222,6 +224,7 @@ export default function Portfolio() {
           todayEstChange: todayEst,
           todayEstPct: total ? (todayEst / total) * 100 : 0,
           todayActualText,
+          todayActual,
           cumulative: cum,
         });
       }
@@ -559,8 +562,23 @@ export default function Portfolio() {
       if (d.success) {
         setShowNewGroupModal(false);
         setNewGroupName('');
+        // 清除分组列表缓存，强制刷新
+        clearCache(`${API}/api/fund/groups`);
+        // 重新获取分组列表
+        apiGet(`${API}/api/fund/groups`, {
+          cache: { ttl: 10 * 60 * 1000 },
+        }).then((groupsRes) => {
+          if (groupsRes.success && groupsRes.groups && groupsRes.groups.length) {
+            const list = groupsRes.groups as Group[];
+            setGroups(list);
+            if (d.group_id) {
+              setSelectedGroupId(d.group_id);
+            } else if (list.length > 0) {
+              setSelectedGroupId(list[0].id);
+            }
+          }
+        });
         fetchData();
-        if (d.group_id) setSelectedGroupId(d.group_id);
       } else {
         alert(d.message || '创建失败');
       }
@@ -577,11 +595,34 @@ export default function Portfolio() {
       const r = await fetch(`${API}/api/fund/groups/${id}`, { method: 'DELETE', credentials: 'include' });
       const d = await r.json();
       if (d.success) {
-        const defaultGroupId = groups.find((g) => g.sort_order === 0)?.id ?? groups[0]?.id;
-        if (selectedGroupId === id) setSelectedGroupId(defaultGroupId ?? id);
         setShowDeleteGroupModal(false);
+        // 清除分组列表缓存，强制刷新
+        clearCache(`${API}/api/fund/groups`);
+        // 重新获取分组列表
+        apiGet(`${API}/api/fund/groups`, {
+          cache: { ttl: 10 * 60 * 1000 },
+        }).then((groupsRes) => {
+          if (groupsRes.success && groupsRes.groups && groupsRes.groups.length) {
+            const list = groupsRes.groups as Group[];
+            setGroups(list);
+            // 如果删除的是当前选中的分组，切换到默认分组或其他分组
+            if (selectedGroupId === id) {
+              const defaultGroupId = list.find((g) => g.sort_order === 0)?.id ?? list[0]?.id;
+              if (defaultGroupId) {
+                setSelectedGroupId(defaultGroupId);
+              } else {
+                setSelectedGroupId(null);
+              }
+            }
+          } else {
+            // 如果没有分组了，清空选中状态
+            setGroups([]);
+            setSelectedGroupId(null);
+          }
+        });
         fetchData();
         fetchWatchlist();
+        setDeletingGroupId(null);
       } else {
         alert(d.message || '删除失败');
         setDeletingGroupId(null);
@@ -931,7 +972,7 @@ export default function Portfolio() {
             background: 'rgba(255, 193, 7, 0.1)',
             border: '1px solid rgba(255, 193, 7, 0.3)',
             borderRadius: 8,
-            fontSize: 'var(--font-size-sm)',
+            fontSize: 'var(--font-size-xs)',
             color: 'var(--text-dim)',
           }}>
             <p style={{ margin: 0, lineHeight: 1.5 }}>
@@ -1007,7 +1048,7 @@ export default function Portfolio() {
               {chartData.labels.length > 0 && chartData.growth.length > 0 ? (
                 <>
                   {/* 右上角图例 */}
-                  <div className="fund-chart-legend" style={{ position: 'absolute', top: 12, right: 15, color: 'var(--text-dim)', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-sm)' }}>
+                  <div className="fund-chart-legend" style={{ position: 'absolute', top: 12, right: 15, color: 'var(--text-dim)', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-md)' }}>
                     {(() => {
                       const lastGrowth = chartData.growth[chartData.growth.length - 1];
                       const lastNetValue = chartData.net_values?.length ? chartData.net_values[chartData.net_values.length - 1] : null;
@@ -1111,7 +1152,7 @@ export default function Portfolio() {
                       const containerWidth = containerEl!.clientWidth;
                       const isMobile = containerWidth < 600;
                       // 基础字体大小（固定，不受 SVG 缩放影响，因为使用 foreignObject）
-                      const baseFontSize = isMobile ? 11 : 12; // 调大一号字体
+                      const baseFontSize = isMobile ? 11 : 12; // 基础字体大小
                       // padding 需要为 Y 轴标题和 X 轴标签预留空间
                       const topLabelSpace = isMobile ? 12 : 16;
                       const bottomLabelSpace = isMobile ? 32 : 34; // 进一步增加底部空间，确保时间轴完全可见
@@ -1296,7 +1337,7 @@ export default function Portfolio() {
                     const scaleY = svgRect.height / chartHeight;
                     const containerWidth = containerEl!.clientWidth;
                     const isMobile = containerWidth < 600;
-                    const baseFontSize = isMobile ? 11 : 12; // 调大一号字体
+                    const baseFontSize = isMobile ? 11 : 12; // 基础字体大小
                     const pad = {
                       left: isMobile ? 40 : 52,
                       right: isMobile ? 12 : 20,
@@ -1524,7 +1565,7 @@ export default function Portfolio() {
           {/* 持仓统计 */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-xl)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: '#facc15' }}>●</span> 持仓统计
               </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1543,7 +1584,7 @@ export default function Portfolio() {
                   role="button"
                   tabIndex={0}
                   title="显示 / 隐藏 收益明细"
-                  style={{ cursor: 'pointer', fontSize: 'var(--font-size-xl)', userSelect: 'none' }}
+                  style={{ cursor: 'pointer', fontSize: 'var(--font-size-xs)', userSelect: 'none' }}
                   onClick={() => {
                     const next = !hideSensitiveValues;
                     if (typeof window !== 'undefined') localStorage.setItem('hideSensitiveValues', String(next));
@@ -1568,7 +1609,9 @@ export default function Portfolio() {
               </div>
               <div className="summary-card">
                 <div className="summary-label">今日实际涨跌(已结算部分)</div>
-                <div className="summary-value" style={{ fontSize: 'var(--font-size-lg)' }}>{hideSensitiveValues ? '****' : summary.todayActualText}</div>
+                <div className={`summary-value ${summary.todayActual >= 0 ? 'positive' : 'negative'}`}>
+                  {hideSensitiveValues ? '****' : summary.todayActualText}
+                </div>
               </div>
               <div className="summary-card">
                 <div className="summary-label">累计收益</div>
@@ -1576,7 +1619,7 @@ export default function Portfolio() {
                   <span className={`summary-value ${displayCumulative >= 0 ? 'positive' : 'negative'}`}>
                     {hideSensitiveValues ? '****' : formatMoney(displayCumulative)}
                   </span>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 'var(--font-size-sm)' }} onClick={openCumulativeCorrectionModal}>修正</button>
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 'var(--font-size-xs)' }} onClick={openCumulativeCorrectionModal}>修正</button>
                 </div>
               </div>
             </div>
@@ -1584,7 +1627,7 @@ export default function Portfolio() {
 
           {/* 持有基金表格 */}
           <div>
-            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-xl)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ color: 'var(--accent)' }}>■</span> 持有基金
             </h3>
             <div className="table-container">
@@ -1629,7 +1672,7 @@ export default function Portfolio() {
 
           {/* 自选基金区块 - 分组切换 + 联想添加 */}
           <div style={{ marginTop: 32 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-xl)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ color: 'var(--accent)' }}>◆</span> 自选基金
             </h3>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1683,7 +1726,7 @@ export default function Portfolio() {
                     borderRadius: 6,
                     background: 'var(--gh-bg-primary)',
                     color: 'var(--text-main)',
-                    fontSize: 'var(--font-size-md)',
+                    fontSize: 'var(--font-size-xs)',
                   }}
                 />
                 {showSuggestions && addSuggestions.length > 0 && (
@@ -1714,7 +1757,7 @@ export default function Portfolio() {
                           cursor: 'pointer',
                           borderBottom: '1px solid var(--gh-border-secondary)',
                           color: 'var(--text-main)',
-                          fontSize: 'var(--font-size-md)',
+                          fontSize: 'var(--font-size-xs)',
                         }}
                         onMouseDown={(e) => { e.preventDefault(); setAddInput(`${f.code} - ${f.name}`); setShowSuggestions(false); }}
                       >
@@ -1733,7 +1776,7 @@ export default function Portfolio() {
               >
                 {addLoading ? '添加中…' : '添加'}
               </button>
-              {addError && <span style={{ color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-sm)' }}>{addError}</span>}
+              {addError && <span style={{ color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-xs)' }}>{addError}</span>}
             </div>
             <div className="table-container">
               <table className="style-table">
@@ -1763,11 +1806,11 @@ export default function Portfolio() {
                       >
                         {String(r.name ?? '')}
                       </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-sm)' }}>{r.netValue != null && r.netValue !== '' ? String(r.netValue) : '—'}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-xs)' }}>{r.netValue != null && r.netValue !== '' ? String(r.netValue) : '—'}</td>
                       <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{r.estPct != null && String(r.estPct) !== '' ? formatPct(r.estPct) : '—'}</td>
                       <td className={String(r.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{r.dayOfGrowth != null && r.dayOfGrowth !== '' ? String(r.dayOfGrowth) : '—'}</td>
-                      <td style={{ fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)' }}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
-                      <td style={{ fontSize: 'var(--font-size-sm)', fontFamily: 'var(--font-mono)' }}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
+                      <td style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)' }}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
+                      <td style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)' }}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
                       <td>
                         {selectedGroupId !== null && (groups.find((g) => g.sort_order === 0)?.id ?? groups[0]?.id) === selectedGroupId ? (
                           <button type="button" className="btn btn-success" style={{ padding: '6px 12px' }} onClick={() => openEditHolding(r)}>修改持仓</button>
@@ -1797,12 +1840,12 @@ export default function Portfolio() {
               <div className="sector-modal-content" style={{ maxWidth: 480, width: '95%' }} onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
                   <div>
-                    <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{detailRow.name || '—'}</div>
-                    <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-dim)', marginTop: 4 }}>{detailRow.code}</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{detailRow.name || '—'}</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginTop: 4 }}>{detailRow.code}</div>
                   </div>
-                  <button type="button" title="关闭" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 4, fontSize: 'var(--font-size-lg)' }} onClick={() => setDetailRow(null)}>✕</button>
+                  <button type="button" title="关闭" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 4, fontSize: 'var(--font-size-xs)' }} onClick={() => setDetailRow(null)}>✕</button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 20, fontSize: 'var(--font-size-base)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 20, fontSize: 'var(--font-size-xs)' }}>
                   <div><span style={{ color: 'var(--text-dim)' }}>净值</span><div style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.netValue ?? '—'}</div></div>
                   <div><span style={{ color: 'var(--text-dim)' }}>今日涨幅</span><div className={toNum(detailRow.estPct) >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.estPct != null && String(detailRow.estPct) !== '' ? formatPct(detailRow.estPct) : '—'}</div></div>
                   <div><span style={{ color: 'var(--text-dim)' }}>昨日涨幅</span><div className={String(detailRow.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.dayOfGrowth ?? '—'}</div></div>
@@ -1822,10 +1865,10 @@ export default function Portfolio() {
               <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header">修改持仓金额</div>
                 <div style={{ padding: '16px 0' }}>
-                  <p style={{ margin: '0 0 12px', color: 'var(--text-dim)', fontSize: 'var(--font-size-sm)' }}>
+                  <p style={{ margin: '0 0 12px', color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>
                     {editHoldingRow.code} - {editHoldingRow.name}
                   </p>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>持有份额</label>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>持有份额</label>
                   <input
                     type="number"
                     min="0"
@@ -1835,7 +1878,7 @@ export default function Portfolio() {
                     className="sector-modal-search"
                     style={{ width: '100%', marginBottom: 12 }}
                   />
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>成本单价（元）</label>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>成本单价（元）</label>
                   <input
                     type="number"
                     min="0"
@@ -1845,7 +1888,7 @@ export default function Portfolio() {
                     className="sector-modal-search"
                     style={{ width: '100%' }}
                   />
-                  {editHoldingError && <p style={{ margin: '12px 0 0', color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-sm)' }}>{editHoldingError}</p>}
+                  {editHoldingError && <p style={{ margin: '12px 0 0', color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-xs)' }}>{editHoldingError}</p>}
                 </div>
                 <div className="sector-modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setEditHoldingRow(null)} disabled={editHoldingLoading}>取消</button>
@@ -1860,14 +1903,14 @@ export default function Portfolio() {
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !addPositionLoading && setAddPositionRow(null)}>
               <div className="sector-modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700 }}>同步加仓</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xl)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setAddPositionRow(null)}>×</button>
+                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700 }}>同步加仓</span>
+                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setAddPositionRow(null)}>×</button>
                 </div>
                 <div style={{ padding: '16px 0' }}>
-                  <div style={{ fontSize: 'var(--font-size-xl)', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{addPositionRow.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)', marginBottom: 12 }}>{addPositionRow.code}</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{addPositionRow.name}</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 12 }}>{addPositionRow.code}</div>
                   <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--gh-bg-tertiary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-dim)' }}>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                       最新净值 {(() => {
                         // 从 netValue 中提取日期，格式可能是 "3.2486(02-12)" 或 "3.2486"
                         const netValueStr = addPositionRow.netValue || '';
@@ -1884,9 +1927,9 @@ export default function Portfolio() {
                     </div>
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-main)', marginBottom: 8 }}>同步加仓金额</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>同步加仓金额</div>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ position: 'absolute', left: 12, color: 'var(--text-dim)', fontSize: 'var(--font-size-md)', zIndex: 1 }}>¥</span>
+                      <span style={{ position: 'absolute', left: 12, color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)', zIndex: 1 }}>¥</span>
                       <input
                         type="number"
                         step="0.01"
@@ -1895,12 +1938,12 @@ export default function Portfolio() {
                         value={addPositionAmount}
                         onChange={(e) => setAddPositionAmount(e.target.value)}
                         className="sector-modal-search"
-                        style={{ width: '100%', padding: '10px 12px 10px 24px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', fontSize: 'var(--font-size-md)', color: 'var(--text-main)' }}
+                        style={{ width: '100%', padding: '10px 12px 10px 24px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}
                       />
                     </div>
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-main)', marginBottom: 8 }}>买入费率</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>买入费率</div>
                     <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
                       {([0, 0.1, 0.15] as const).map((rate) => (
                         <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
@@ -1911,12 +1954,12 @@ export default function Portfolio() {
                             onChange={() => setAddPositionFeeRate(rate)} 
                             style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }} 
                           />
-                          <span style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-main)' }}>{rate}%</span>
+                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}>{rate}%</span>
                         </label>
                       ))}
                     </div>
                     {addPositionAmount && (
-                      <div style={{ marginTop: 8, fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>
+                      <div style={{ marginTop: 8, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                         {(() => {
                           const inputAmount = parseFloat(addPositionAmount) || 0;
                           const fee = inputAmount * addPositionFeeRate / 100;
@@ -1945,7 +1988,7 @@ export default function Portfolio() {
                     )}
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-main)', marginBottom: 8 }}>原平台买入时间</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>原平台买入时间</div>
                     <div
                       role="button"
                       tabIndex={0}
@@ -1953,8 +1996,8 @@ export default function Portfolio() {
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAddPositionTimePickerOpen(true); } }}
                       style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', color: addPositionTime ? 'var(--text-main)' : 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      <span style={{ fontSize: 'var(--font-size-base)' }}>{addPositionTime ? `${addPositionTime.date.slice(5, 7)}月${addPositionTime.date.slice(8)}日 ${addPositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
-                      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--font-size-sm)' }}>▼</span>
+                      <span style={{ fontSize: 'var(--font-size-xs)' }}>{addPositionTime ? `${addPositionTime.date.slice(5, 7)}月${addPositionTime.date.slice(8)}日 ${addPositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
+                      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>▼</span>
                     </div>
                   </div>
                 </div>
@@ -1991,7 +2034,7 @@ export default function Portfolio() {
                       key={opt.date + opt.period}
                       role="button"
                       tabIndex={0}
-                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-base)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: addPositionTime?.date === opt.date && addPositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
+                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-xs)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: addPositionTime?.date === opt.date && addPositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
                       onClick={() => { setAddPositionTime({ date: opt.date, period: opt.period }); setAddPositionTimePickerOpen(false); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAddPositionTime({ date: opt.date, period: opt.period }); setAddPositionTimePickerOpen(false); } }}
                     >
@@ -2009,14 +2052,14 @@ export default function Portfolio() {
               <div className="sector-modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>减仓</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xl)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReducePositionRow(null)}>×</button>
+                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReducePositionRow(null)}>×</button>
                 </div>
                 <div style={{ padding: '16px 0' }}>
-                  <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 600, color: 'var(--text-main)' }}>{reducePositionRow.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)', marginTop: 2 }}>{reducePositionRow.code}</div>
-                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-base)', color: 'var(--text-dim)' }}>
+                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--text-main)' }}>{reducePositionRow.name}</div>
+                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginTop: 2 }}>{reducePositionRow.code}</div>
+                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                     当前净值 <span style={{ fontWeight: 600, color: 'var(--text-main)', marginLeft: 8 }}>{reducePositionRow.netValue ?? '—'}</span>
-                    <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)', marginLeft: 8 }}>持有份额</span>
+                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginLeft: 8 }}>持有份额</span>
                     <span style={{ fontWeight: 500, marginLeft: 4 }}>{(reducePositionRow.holding_units ?? 0).toFixed(2)}</span>
                   </div>
                   <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
@@ -2029,11 +2072,11 @@ export default function Portfolio() {
                       value={reducePositionUnits}
                       onChange={(e) => setReducePositionUnits(e.target.value)}
                       className="sector-modal-search"
-                      style={{ flex: 1, border: 'none', background: 'none', padding: '10px 0', fontSize: 'var(--font-size-md)', color: 'var(--text-main)' }}
+                      style={{ flex: 1, border: 'none', background: 'none', padding: '10px 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}
                     />
                     <span style={{ color: 'var(--text-dim)' }}>份</span>
                   </div>
-                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>
+                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                     赎回费率：
                     {([0, 0.5, 1, 1.5] as const).map((rate) => (
                       <label key={rate} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginLeft: 12 }}>
@@ -2043,7 +2086,7 @@ export default function Portfolio() {
                     ))}
                   </div>
                   {reducePositionUnits && reducePositionTime && (
-                    <div style={{ marginTop: 8, fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>
+                    <div style={{ marginTop: 8, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                       {(() => {
                         const units = parseFloat(reducePositionUnits) || 0;
                         const netValue = parseNetValue(reducePositionRow.netValue) || 1;
@@ -2069,7 +2112,7 @@ export default function Portfolio() {
                     </div>
                   )}
                   <div style={{ marginTop: 16 }}>
-                    <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)', marginBottom: 6 }}>卖出时间</div>
+                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 6 }}>卖出时间</div>
                     <div
                       role="button"
                       tabIndex={0}
@@ -2077,7 +2120,7 @@ export default function Portfolio() {
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setReducePositionTimePickerOpen(true); } }}
                       style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      <span style={{ fontSize: 'var(--font-size-md)' }}>{reducePositionTime ? `${reducePositionTime.date.slice(5, 7)}月${reducePositionTime.date.slice(8)}日 ${reducePositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
+                      <span style={{ fontSize: 'var(--font-size-xs)' }}>{reducePositionTime ? `${reducePositionTime.date.slice(5, 7)}月${reducePositionTime.date.slice(8)}日 ${reducePositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
                       <span style={{ color: 'var(--text-dim)' }}>▼</span>
                     </div>
                   </div>
@@ -2115,7 +2158,7 @@ export default function Portfolio() {
                       key={opt.date + opt.period}
                       role="button"
                       tabIndex={0}
-                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-base)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: reducePositionTime?.date === opt.date && reducePositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
+                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-xs)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: reducePositionTime?.date === opt.date && reducePositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
                       onClick={() => { setReducePositionTime({ date: opt.date, period: opt.period }); setReducePositionTimePickerOpen(false); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setReducePositionTime({ date: opt.date, period: opt.period }); setReducePositionTimePickerOpen(false); } }}
                     >
@@ -2133,7 +2176,7 @@ export default function Portfolio() {
               <div className="sector-modal-content" style={{ maxWidth: 360 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header">新建分组</div>
                 <div style={{ padding: '16px 0' }}>
-                  <label style={{ display: 'block', marginBottom: 8, fontSize: 'var(--font-size-base)', color: 'var(--text-dim)' }}>分组名称</label>
+                  <label style={{ display: 'block', marginBottom: 8, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>分组名称</label>
                   <input
                     type="text"
                     value={newGroupName}
@@ -2156,15 +2199,15 @@ export default function Portfolio() {
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !deletingGroupId && setShowDeleteGroupModal(false)}>
               <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>删除分组</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xl)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setShowDeleteGroupModal(false)}>×</button>
+                  <span style={{ fontSize: 'var(--font-size-xs)' }}>删除分组</span>
+                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setShowDeleteGroupModal(false)}>×</button>
                 </div>
                 <div style={{ padding: '16px 0' }}>
-                  <p style={{ margin: '0 0 16px', fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>
+                  <p style={{ margin: '0 0 16px', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
                     请选择要删除的分组，删除后该分组内的基金将移至默认分组。
                   </p>
                   {groups.filter((g) => g.sort_order !== 0).length === 0 ? (
-                    <p style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)' }}>没有可删除的分组</p>
+                    <p style={{ padding: 20, textAlign: 'center', color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>没有可删除的分组</p>
                   ) : (
                     <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                       {groups
@@ -2191,18 +2234,18 @@ export default function Portfolio() {
                             }}
                           >
                             <div>
-                              <div style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-main)', fontWeight: 500 }}>{g.name}</div>
-                              <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)', marginTop: 4 }}>
+                              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', fontWeight: 500 }}>{g.name}</div>
+                              <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginTop: 4 }}>
                                 包含 {g.fund_codes?.length || 0} 只基金
                               </div>
                             </div>
                             {deletingGroupId === g.id ? (
-                              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--text-dim)' }}>删除中…</span>
+                              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>删除中…</span>
                             ) : (
                               <button
                                 type="button"
                                 className="btn btn-secondary"
-                                style={{ padding: '6px 12px', fontSize: 'var(--font-size-sm)' }}
+                                style={{ padding: '6px 12px', fontSize: 'var(--font-size-xs)' }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   onDeleteGroup(g.id);
@@ -2230,9 +2273,9 @@ export default function Portfolio() {
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => setShowCumulativeCorrectionModal(false)}>
               <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header">修正累计收益</div>
-                <p style={{ fontSize: 'var(--font-size-base)', color: 'var(--text-dim)', margin: '0 0 12px 0' }}>显示累计收益 = 现有累计收益 − 修正金额</p>
+                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', margin: '0 0 12px 0' }}>显示累计收益 = 现有累计收益 − 修正金额</p>
                 <div style={{ padding: '16px 0' }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-base)', color: 'var(--text-dim)' }}>修正金额（元）</label>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>修正金额（元）</label>
                   <input
                     type="number"
                     step="0.01"
@@ -2281,7 +2324,7 @@ export default function Portfolio() {
                       <span style={{ color: 'var(--accent)' }}>{f.code}</span>
                       <span>{f.name}</span>
                       {f.sectors && f.sectors.length > 0 && (
-                        <span style={{ color: 'var(--text-dim)', fontSize: 'var(--font-size-sm)' }}>🏷️ {f.sectors.join(', ')}</span>
+                        <span style={{ color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>🏷️ {f.sectors.join(', ')}</span>
                       )}
                     </div>
                   ))}
@@ -2346,7 +2389,7 @@ export default function Portfolio() {
                   <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
                     {Object.entries(SECTOR_CATEGORIES).map(([category, tags]) => (
                       <div key={category} style={{ marginBottom: 20 }}>
-                        <div style={{ marginBottom: 8, color: 'var(--text-dim)', fontSize: 'var(--font-size-sm)', fontWeight: 600 }}>{category}</div>
+                        <div style={{ marginBottom: 8, color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>{category}</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {tags.map((tag) => (
                             <button
@@ -2355,7 +2398,7 @@ export default function Portfolio() {
                               className="btn"
                               style={{
                                 padding: '8px 12px',
-                                fontSize: 'var(--font-size-sm)',
+                                fontSize: 'var(--font-size-xs)',
                                 background: sectorSelectedTags.includes(tag) ? 'var(--accent)' : 'var(--gh-bg-tertiary)',
                                 color: sectorSelectedTags.includes(tag) ? '#fff' : 'var(--text-main)',
                                 border: '1px solid var(--border)',
@@ -2378,14 +2421,14 @@ export default function Portfolio() {
                 </div>
                 {/* 右侧：添加分组功能 */}
                 <div style={{ width: 180, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
-                  <div style={{ marginBottom: 12, color: 'var(--text-main)', fontSize: 'var(--font-size-md)', fontWeight: 600 }}>功能</div>
+                  <div style={{ marginBottom: 12, color: 'var(--text-main)', fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>功能</div>
                   <button
                     type="button"
                     className="btn btn-info"
                     style={{
                       width: '100%',
                       padding: '10px 12px',
-                      fontSize: 'var(--font-size-sm)',
+                      fontSize: 'var(--font-size-xs)',
                       marginBottom: 12,
                     }}
                     onClick={() => {
@@ -2542,7 +2585,7 @@ export default function Portfolio() {
                 <div style={{ textAlign: 'center', padding: '25px 20px 12px' }}>
                   <div style={{ fontSize: '2.5rem', marginBottom: 10 }}>💰</div>
                   <h2 style={{ fontSize: '1.5rem', fontWeight: 700, margin: '0 0 8px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>今日收益</h2>
-                  <p style={{ fontSize: 'var(--font-size-md)', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+                  <p style={{ fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.5)', margin: 0 }}>
                     {new Date().getFullYear()}-{String(new Date().getMonth() + 1).padStart(2, '0')}-{String(new Date().getDate()).padStart(2, '0')}
                   </p>
                 </div>
@@ -2550,22 +2593,22 @@ export default function Portfolio() {
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <div style={{ flex: 1, maxWidth: 200, background: 'linear-gradient(135deg, rgba(102,126,234,0.2), rgba(118,75,162,0.15))', border: '1px solid rgba(102,126,234,0.3)', borderRadius: 16, padding: '14px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>总持仓</div>
-                      <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700 }}>{hideSensitiveValues ? '****' : formatYuan(displayTotalHolding)}</div>
+                      <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700 }}>{hideSensitiveValues ? '****' : formatYuan(displayTotalHolding)}</div>
                     </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
                     <div style={{ flex: 1, maxWidth: 140, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '14px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>今日预估</div>
-                      <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: summary.todayEstChange >= 0 ? '#ff4757' : '#2ed573' }}>{hideSensitiveValues ? '****' : formatMoney(summary.todayEstChange)}</div>
+                      <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: summary.todayEstChange >= 0 ? '#ff4757' : '#2ed573' }}>{hideSensitiveValues ? '****' : formatMoney(summary.todayEstChange)}</div>
                     </div>
                     <div style={{ flex: 1, maxWidth: 140, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '14px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 'var(--font-size-xs)', color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>今日实际</div>
-                      <div style={{ fontSize: 'var(--font-size-lg)', fontWeight: 700, color: summary.todayActualText.includes('未') ? 'rgba(255,255,255,0.7)' : (summary.todayEstChange >= 0 ? '#ff4757' : '#2ed573') }}>{hideSensitiveValues ? '****' : summary.todayActualText}</div>
+                      <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: summary.todayActualText.includes('未') ? 'rgba(255,255,255,0.7)' : (summary.todayEstChange >= 0 ? '#ff4757' : '#2ed573') }}>{hideSensitiveValues ? '****' : summary.todayActualText}</div>
                     </div>
                   </div>
                 </div>
                 <div style={{ padding: '0 20px 20px' }}>
-                  <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 'var(--font-size-md)', fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>🏆 收益Top3</div>
+                  <div style={{ textAlign: 'center', marginBottom: 16, fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>🏆 收益Top3</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {[...fundRows]
                       .sort((a, b) => {
@@ -2598,7 +2641,7 @@ export default function Portfolio() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: 'var(--font-size-md)',
+                                fontSize: 'var(--font-size-xs)',
                                 fontWeight: 700,
                                 flexShrink: 0,
                                 background: i === 0 ? 'linear-gradient(135deg, #ffd700, #ffaa00)' : i === 1 ? 'linear-gradient(135deg, #c0c0c0, #a0a0a0)' : 'linear-gradient(135deg, #cd7f32, #b87333)',
@@ -2607,13 +2650,13 @@ export default function Portfolio() {
                             >
                               {i + 1}
                             </div>
-                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--font-size-md)', fontWeight: 600 }}>{r.name || r.code}</div>
-                            <div style={{ fontSize: 'var(--font-size-md)', fontWeight: 700, color: gainColor, whiteSpace: 'nowrap' }}>{hideSensitiveValues ? '****' : formatMoney(gain)}</div>
+                            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>{r.name || r.code}</div>
+                            <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: gainColor, whiteSpace: 'nowrap' }}>{hideSensitiveValues ? '****' : formatMoney(gain)}</div>
                           </div>
                         );
                       })}
                     {fundRows.length === 0 && (
-                      <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 'var(--font-size-base)' }}>暂无数据</div>
+                      <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 'var(--font-size-xs)' }}>暂无数据</div>
                     )}
                   </div>
                 </div>

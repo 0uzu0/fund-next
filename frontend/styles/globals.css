@@ -212,6 +212,33 @@ body {
   transform: none !important;
 }
 
+/* Tab 按钮 */
+.tab-button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  background: rgba(59, 130, 246, 0.9);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+.tab-button:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+.tab-button.active {
+  background: rgba(59, 130, 246, 1);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.5);
+  filter: brightness(1.15);
+}
+
 /* 表格 */
 .table-container {
   background: var(--gh-bg-primary);

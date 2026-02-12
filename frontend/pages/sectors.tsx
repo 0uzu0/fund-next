@@ -381,7 +381,7 @@ function Sectors() {
                                       onClick={() => handleAddToWatchlist(row.code)}
                                       disabled={addingFundCode === row.code || groups.length === 0}
                                     >
-                                      ➕ 添加
+                                      添加
                                     </button>
                                   </td>
                                 </tr>

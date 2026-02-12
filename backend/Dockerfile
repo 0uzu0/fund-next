@@ -54,8 +54,10 @@ COPY --from=backend-builder /app .
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# 设置数据目录权限
-RUN chown -R nodejs:nodejs /app/cache
+# 创建必要的目录并设置权限
+RUN mkdir -p /app/cache /app/tmp && \
+    chown -R nodejs:nodejs /app/cache /app/tmp && \
+    chmod -R 755 /app/tmp
 
 # 切换到非 root 用户
 USER nodejs
