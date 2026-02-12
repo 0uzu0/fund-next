@@ -1,0 +1,17 @@
+node_modules/
+npm-debug.log
+.env.local
+.env.*
+!.env.example
+.git/
+.gitignore
+*.md
+.next/
+out/
+dist/
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+.DS_Store
+Thumbs.db
