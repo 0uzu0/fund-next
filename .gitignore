@@ -96,6 +96,21 @@ next-env.d.ts
 **/public/workbox-*.js.map
 **/public/worker-*.js.map
 
+# Mobile (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/android/
+mobile/ios/
+mobile/dist/
+mobile/web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+.metro-health-check*
+*.jsbundle
+
 # Misc
 *.pem
 .cache/

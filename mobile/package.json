@@ -1,0 +1,33 @@
+{
+  "name": "lanfund-mobile",
+  "version": "1.0.0",
+  "description": "LanFund 基金管理系统 - Android 移动端",
+  "main": "node_modules/expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild --platform android",
+    "build:apk": "eas build --platform android --profile preview",
+    "build:apk-local": "expo prebuild --platform android && cd android && ./gradlew assembleRelease",
+    "build:aab": "eas build --platform android --profile production"
+  },
+  "dependencies": {
+    "expo": "~52.0.0",
+    "expo-splash-screen": "~0.29.0",
+    "expo-status-bar": "~2.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-secure-store": "~14.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.7",
+    "react-native-webview": "13.12.5",
+    "react-native-safe-area-context": "4.14.1",
+    "@react-native-async-storage/async-storage": "2.1.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@types/react": "~18.3.0",
+    "typescript": "~5.3.0"
+  },
+  "private": true
+}
