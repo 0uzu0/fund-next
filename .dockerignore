@@ -37,10 +37,10 @@ coverage/
 *.test.js
 *.spec.js
 
-# Build artifacts
+# Build artifacts (but keep frontend/out for Docker build)
 dist/
 build/
-out/
+# Don't ignore frontend/out - it will be built in Docker
 .next/
 
 # Dependencies (will be installed in container)

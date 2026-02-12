@@ -1,5 +1,6 @@
 require('dotenv').config();
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');
@@ -51,8 +52,13 @@ app.use(authRoutes);
 app.use(fundApi);
 
 // 前端静态与 SPA 回退（由 Next 构建输出）
-const frontendBuild = path.join(__dirname, '../frontend/out');
-const frontendPublic = path.join(__dirname, '../frontend/public');
+// 支持开发环境（../frontend/out）和生产环境（./frontend/out）
+const frontendBuild = fs.existsSync(path.join(__dirname, 'frontend/out'))
+  ? path.join(__dirname, 'frontend/out')
+  : path.join(__dirname, '../frontend/out');
+const frontendPublic = fs.existsSync(path.join(__dirname, 'frontend/public'))
+  ? path.join(__dirname, 'frontend/public')
+  : path.join(__dirname, '../frontend/public');
 app.use(express.static(frontendBuild));
 app.use(express.static(frontendPublic));
 
