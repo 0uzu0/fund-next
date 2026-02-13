@@ -35,6 +35,8 @@ function getInjectedJS(version: string): string {
 (function() {
   window.__LANFUND_APP__ = true;
   window.__LANFUND_APP_VERSION__ = '${version.replace(/'/g, "\\'")}';
+  if (document.body) document.body.classList.add('lanfund-app');
+  else document.addEventListener('DOMContentLoaded', function() { document.body.classList.add('lanfund-app'); });
 
   document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 

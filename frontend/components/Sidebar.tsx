@@ -87,6 +87,7 @@ function Sidebar() {
           aria-current={isActive(item.href) ? 'page' : undefined}
         >
           <span className="icon">{item.icon}</span>
+          <span className="sidebar-label" aria-hidden="true">{item.label}</span>
         </Link>
       ))}
       {isAdmin && (
@@ -98,6 +99,7 @@ function Sidebar() {
           aria-current={isAdminActive ? 'page' : undefined}
         >
           <span className="icon">👤</span>
+          <span className="sidebar-label" aria-hidden="true">用户管理</span>
         </Link>
       )}
     </aside>

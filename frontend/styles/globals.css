@@ -407,6 +407,7 @@ h3 {
   color: var(--accent);
 }
 .sidebar-nav .sidebar-icon .icon { font-size: 20px; }
+.sidebar-nav .sidebar-label { display: none; }
 
 /* 按钮 */
 .btn {
@@ -868,7 +869,7 @@ h3.portfolio-section-title,
     width: 100%;
   }
 
-  /* 侧边栏 - 移动端改为横向并固定在顶部，便于显示与跳转 */
+  /* 侧边栏 - 窄屏改为横向，安全区 + 触控区域 + 文案 */
   .sidebar-nav {
     position: sticky;
     top: 0;
@@ -880,25 +881,30 @@ h3.portfolio-section-title,
     overflow-x: auto;
     overflow-y: hidden;
     padding: 8px 12px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
     border-right: none;
     border-bottom: 1px solid var(--sidebar-border);
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     background: var(--sidebar-bg);
+    gap: 4px;
   }
   .sidebar-nav::-webkit-scrollbar {
     display: none;
   }
   .sidebar-nav .sidebar-icon {
     flex: 0 0 auto;
-    min-width: 50px;
-    min-height: 44px;
-    padding: 8px 4px;
+    min-width: 56px;
+    min-height: 48px;
+    padding: 6px 8px;
     border-left: none;
     border-bottom: 3px solid transparent;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 2px;
   }
   .sidebar-nav .sidebar-icon.active {
     border-left: none;
@@ -906,7 +912,21 @@ h3.portfolio-section-title,
     background: linear-gradient(180deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.05) 100%);
   }
   .sidebar-nav .sidebar-icon .icon {
-    font-size: 18px;
+    font-size: 20px;
+  }
+  .sidebar-nav .sidebar-label {
+    display: block;
+    font-size: 10px;
+    line-height: 1.2;
+    color: var(--gh-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 56px;
+    text-align: center;
+  }
+  .sidebar-nav .sidebar-icon.active .sidebar-label {
+    color: var(--accent);
   }
 
   /* 按钮 */
@@ -1127,6 +1147,26 @@ h3.portfolio-section-title,
   .fund-chart-container svg text {
     font-size: 9px !important;
   }
+
+  /* 侧边栏 - 超小屏缩短标签 */
+  .sidebar-nav .sidebar-label {
+    font-size: 9px;
+    max-width: 48px;
+  }
+  .sidebar-nav .sidebar-icon {
+    min-width: 48px;
+  }
+}
+
+/* App 内嵌（WebView）：隐藏 Web 侧边栏，由原生底部栏导航，并预留底部栏空间 */
+body.lanfund-app .sidebar-nav {
+  display: none !important;
+}
+body.lanfund-app .main-container {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+body.lanfund-app .content-area {
+  width: 100%;
 }
 
 /* 强制：持仓统计、持有基金、自选基金区块标题字号 */
