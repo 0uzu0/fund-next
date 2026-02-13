@@ -195,15 +195,24 @@ fund-next/
 
 ## 🐳 Docker 部署
 
-### 使用 Action 打包的镜像（推荐）
+### 服务端 Docker 打包与发布（自动化流程）
 
-CI 在 push 到 main/master 后会自动构建并推送镜像到 GitHub Container Registry。在项目根目录创建 `.env` 并设置镜像地址后即可直接拉取运行：
+| 方式 | 说明 |
+|------|------|
+| **自动构建** | 代码 push 到 `main` / `master` 后，CI/CD 会自动构建并推送镜像 `ghcr.io/<用户名>/<仓库名>:latest`。 |
+| **手动发布** | 在 GitHub 仓库 **Actions** 页选择 **「Docker 服务端镜像构建与发布」**，点击 **Run workflow**，可选填写镜像标签（如 `v1.0.0`），运行完成后即可拉取对应镜像。 |
+
+手动发布时若填写了标签（如 `v1.0.0`），会同时推送该标签与 `latest`；不填则仅更新 `latest`。
+
+### 使用已打包镜像部署（推荐）
+
+在项目根目录创建 `.env`，配置镜像与密钥后直接拉取运行：
 
 ```bash
-# 创建 .env（可复制 .env.example 后修改），例如：
-#   DOCKER_IMAGE=ghcr.io/username/fund-next:latest
+# .env 示例（按需修改）：
+#   DOCKER_IMAGE=ghcr.io/你的用户名/fund-next:latest
 #   SESSION_SECRET=一串随机密钥或 UUID
-# 注意：SESSION_SECRET 直接写明文，不要写 ${SESSION_SECRET:xxx}，否则 Compose 会报错
+# 注意：SESSION_SECRET 写明文，不要写 ${SESSION_SECRET:xxx}，否则 Compose 会报错
 
 docker-compose up -d
 
@@ -216,13 +225,13 @@ docker-compose down
 
 ### 本地构建并运行
 
-若需在本地构建镜像而非使用 Action 镜像：
+不依赖 Action 镜像、在本地从源码构建并运行：
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-访问：http://localhost:3000（前端）和 http://localhost:8311（后端 API）
+访问：http://localhost:3000（前端）、http://localhost:8311（后端 API）。
 
 ---
 
