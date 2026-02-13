@@ -22,7 +22,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
-import { THEME, USER_AGENT_SUFFIX, BOTTOM_NAV_ROUTES, APP_VERSION } from './config';
+import { THEME, USER_AGENT_SUFFIX, BOTTOM_NAV_ROUTES, APP_VERSION, PAGE_LOAD_TIMEOUT } from './config';
 
 interface WebViewScreenProps {
   serverUrl: string;
@@ -75,6 +75,16 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
   const [currentUrl, setCurrentUrl] = useState('');
   const [pageTitle, setPageTitle] = useState('LanFund');
   const [refreshing, setRefreshing] = useState(false);
+
+  // 加载超时：服务器不可达时避免一直转圈
+  useEffect(() => {
+    if (!loading || error) return;
+    const timer = setTimeout(() => {
+      setLoading(false);
+      setError('连接超时\n请检查手机与服务器是否在同一网络，或到设置中修改服务器地址');
+    }, PAGE_LOAD_TIMEOUT);
+    return () => clearTimeout(timer);
+  }, [loading, error, serverUrl]);
 
   // Android 返回键处理
   useEffect(() => {
