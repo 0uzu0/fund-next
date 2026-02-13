@@ -6,18 +6,13 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "scheme": "fund",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.lanfund.mobile"
-    },
+    "splash": { "resizeMode": "contain", "backgroundColor": "#1a1a2e" },
+    "plugins": [
+      ["expo-build-properties", { "android": { "kotlinVersion": "1.9.25" } }]
+    ],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.lanfund.mobile" },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#1a1a2e"
-      },
+      "adaptiveIcon": { "backgroundColor": "#1a1a2e" },
       "package": "com.lanfund.mobile",
       "usesCleartextTraffic": true
     }
