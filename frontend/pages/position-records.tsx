@@ -69,8 +69,14 @@ function PositionRecords() {
         } else {
           setRecords([]);
         }
+        setAuth({ username: '' }); // 有数据即视为已登录
       })
       .catch((e) => {
+        if (e.message === 'Unauthorized') {
+          router.push('/login');
+          return;
+        }
+        setAuth({ username: '' }); // 非 401 时也允许展示页面（显示错误信息）
         setError('加载失败: ' + (e.message || String(e)));
         setRecords([]);
       })
@@ -78,22 +84,9 @@ function PositionRecords() {
   }, []);
 
   useEffect(() => {
-    // 使用 API 客户端，带缓存（10分钟）
-    // 只在组件挂载时执行一次，避免路由变化时重复执行
-    apiGet<{ username: string }>(getApiBase() + '/api/auth/me', {
-      cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
-    })
-      .then(setAuth)
-      .catch(() => {
-        // 使用 router.push 而不是 router.replace，避免整页刷新
-        router.push('/login');
-      });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在挂载时执行一次
-
-  useEffect(() => {
-    if (auth) fetchRecords();
-  }, [auth, fetchRecords]);
+    // 直接请求持仓记录接口，避免先请求 /api/auth/me 导致跳转；401 时再跳登录
+    fetchRecords();
+  }, [fetchRecords]);
 
   const onUndo = useCallback((rec: PositionRecord) => {
     if (!rec.can_undo) return;
