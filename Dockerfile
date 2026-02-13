@@ -32,19 +32,21 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+RUN apk add --no-cache su-exec && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
 COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app .
+RUN chmod +x /app/entrypoint.sh
 
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
 RUN mkdir -p /app/cache /app/tmp /app/data && \
     chown -R nodejs:nodejs /app/cache /app/tmp /app/data && \
     chmod -R 755 /app/tmp
 
-USER nodejs
 EXPOSE 8311
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8311/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -14,6 +14,7 @@ services:
       - NODE_ENV=production
       - PORT=8311
       - DB_PATH=/app/data/fund_data.db
+      - SESSION_PATH=/app/data/sessions
       - SESSION_SECRET=${SESSION_SECRET:-change-this-secret-key}
       - TZ=${TZ:-Asia/Shanghai}
     volumes:

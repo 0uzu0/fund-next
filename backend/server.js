@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const compression = require('compression');
@@ -34,12 +35,19 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+const sessionDir = process.env.SESSION_PATH || path.join(__dirname, 'data', 'sessions');
+if (process.env.NODE_ENV === 'production') {
+  try { fs.mkdirSync(sessionDir, { recursive: true }); } catch (e) { /* 可能无写权限，由 entrypoint 修复 */ }
+}
 app.use(
   session({
     secret: process.env.SESSION_SECRET || 'luobobo',
     resave: false,
     saveUninitialized: false,
     cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+    store: process.env.NODE_ENV === 'production'
+      ? new FileStore({ path: sessionDir, ttl: 7 * 24 * 3600 })
+      : undefined,
   })
 );
 
