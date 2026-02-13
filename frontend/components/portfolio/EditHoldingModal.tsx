@@ -37,7 +37,8 @@ export default function EditHoldingModal({
           <input
             type="number"
             min="0"
-            step="any"
+            step="0.01"
+            placeholder="保留两位小数"
             value={units}
             onChange={(e) => onUnitsChange(e.target.value)}
             className="sector-modal-search"
@@ -48,6 +49,7 @@ export default function EditHoldingModal({
             type="number"
             min="0"
             step="0.0001"
+            placeholder="保留四位小数"
             value={costPerUnit}
             onChange={(e) => onCostPerUnitChange(e.target.value)}
             className="sector-modal-search"

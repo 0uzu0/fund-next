@@ -201,19 +201,21 @@ export default function Portfolio() {
       }
       if (listRes.success && listRes.funds && listRes.funds.length) {
         setFundList(listRes.funds);
-        const firstFund = listRes.funds[0];
-        
-        // 预加载所有持仓基金的图表数据
+      }
+      // 有持仓表格或 fund-list 时预加载图表数据，并设置默认选中基金
+      const hasFundList = listRes.success && listRes.funds && listRes.funds.length;
+      const hasHoldingRows = tableRes.success && tableRes.rows && tableRes.rows.length;
+      if (hasFundList || hasHoldingRows) {
         preloadChartData();
-        
-        // 只在首次加载且没有选中基金时设置默认基金
         if (!chartFund) {
-          // 延迟设置图表基金，确保页面完全渲染后再加载图表
+          const firstFund = hasFundList
+            ? (listRes.funds as { code: string; name: string }[])[0]
+            : { code: (tableRes.rows as FundRow[])[0].code, name: (tableRes.rows as FundRow[])[0].name || `基金${(tableRes.rows as FundRow[])[0].code}` };
           setTimeout(() => {
             startTransition(() => {
               setChartFund(firstFund);
             });
-          }, 500); // 延迟500ms，让页面先完全渲染和交互
+          }, 500);
         }
       }
       if (groupsRes.success && groupsRes.groups && groupsRes.groups.length) {
@@ -424,16 +426,15 @@ export default function Portfolio() {
     }
     if (sectorOp === 'remove') {
       setSectorSubmitLoading(true);
-      fetch(`${API}/api/fund/sector/remove`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codes: sectorSelectedCodes.join(',') }),
-      })
-        .then((res) => res.json())
+      apiPost<{ success: boolean; message?: string }>(`${API}/api/fund/sector/remove`, { codes: sectorSelectedCodes.join(',') })
         .then((d) => {
           alert(d.message || (d.success ? '已删除板块标记' : '操作失败'));
-          if (d.success) { fetchData(); setShowSectorFundModal(false); setSectorOp(null); }
+          if (d.success) {
+            clearCache('api/fund/data');
+            fetchData();
+            setShowSectorFundModal(false);
+            setSectorOp(null);
+          }
         })
         .catch(() => alert('操作失败'))
         .finally(() => setSectorSubmitLoading(false));
@@ -449,16 +450,18 @@ export default function Portfolio() {
       return;
     }
     setSectorSubmitLoading(true);
-    fetch(`${API}/api/fund/sector`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codes: sectorSelectedCodes.join(','), sectors: sectorSelectedTags }),
+    apiPost<{ success: boolean; message?: string }>(`${API}/api/fund/sector`, {
+      codes: sectorSelectedCodes.join(','),
+      sectors: sectorSelectedTags,
     })
-      .then((res) => res.json())
       .then((d) => {
         alert(d.message || (d.success ? '已标注板块' : '操作失败'));
-        if (d.success) { fetchData(); setShowSectorTagModal(false); setSectorOp(null); }
+        if (d.success) {
+          clearCache('api/fund/data');
+          fetchData();
+          setShowSectorTagModal(false);
+          setSectorOp(null);
+        }
       })
       .catch(() => alert('操作失败'))
       .finally(() => setSectorSubmitLoading(false));
@@ -646,8 +649,8 @@ export default function Portfolio() {
 
   const openEditHolding = (r: FundRow) => {
     setEditHoldingRow(r);
-    setEditHoldingUnits(String(r.holding_units ?? 0));
-    setEditCostPerUnit(String(r.cost_per_unit ?? 1));
+    setEditHoldingUnits(Number(r.holding_units ?? 0).toFixed(2));
+    setEditCostPerUnit(Number(r.cost_per_unit ?? 1).toFixed(4));
     setEditHoldingError('');
   };
 
@@ -661,12 +664,14 @@ export default function Portfolio() {
     }
     setEditHoldingError('');
     setEditHoldingLoading(true);
+    const unitsRounded = Math.round(units * 100) / 100;
+    const costRounded = Math.round(cost * 10000) / 10000;
     try {
       const res = await fetch(`${API}/api/fund/shares`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ code: editHoldingRow.code, holding_units: units, cost_per_unit: cost }),
+        body: JSON.stringify({ code: editHoldingRow.code, holding_units: unitsRounded, cost_per_unit: costRounded }),
       });
       const d = await res.json();
       if (d.success) {
@@ -719,16 +724,14 @@ export default function Portfolio() {
     // 实际买入金额（扣除手续费后）
     const actualAmount = amount - fee;
     
-    // 新增份额 = 实际买入金额 / 净值
+    // 新增份额 = 实际买入金额 / 净值（提交时持有份额保留2位、成本单价保留4位小数）
     const addUnits = actualAmount / netValue;
-    const newUnits = oldUnits + addUnits;
-    
-    // 新持仓金额 = 原持仓金额 + 已买入金额 - 手续费
+    const newUnitsRaw = oldUnits + addUnits;
+    const newUnits = Math.round(newUnitsRaw * 100) / 100;
     const oldHoldingAmount = oldUnits * oldCost;
     const newHoldingAmount = oldHoldingAmount + actualAmount;
-    
-    // 新持仓成本 = 新持仓金额 / 新份额
-    const newCost = newUnits > 0 ? (newHoldingAmount / newUnits) : oldCost;
+    const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : oldCost;
+    const newCost = Math.round(newCostRaw * 10000) / 10000;
     
     setAddPositionLoading(true);
     try {
@@ -803,19 +806,15 @@ export default function Portfolio() {
       alert('减仓份额不能大于当前持有份额');
       return;
     }
-    let newUnits = Math.max(0, oldUnits - reduceUnits);
-    if (newUnits < 1e-6) newUnits = 0;
+    let newUnitsRaw = Math.max(0, oldUnits - reduceUnits);
+    if (newUnitsRaw < 1e-6) newUnitsRaw = 0;
+    const newUnits = Math.round(newUnitsRaw * 100) / 100; // 持有份额保留2位小数
     
-    // 计算减仓金额（包含手续费）：
-    // 减仓金额 = 减仓份数 * 净值 + 减仓份数 * 净值 * 赎回费率
     const reduceAmount = reduceUnits * netValue + reduceUnits * netValue * reducePositionFeeRate / 100;
-    
-    // 计算新持仓金额：原持仓金额 - 减仓金额（含手续费）
     const oldHoldingAmount = oldUnits * oldCost;
     const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
-    
-    // 计算新持仓成本
-    const newCost = newUnits > 0 ? (newHoldingAmount / newUnits) : 1;
+    const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : 1;
+    const newCost = Math.round(newCostRaw * 10000) / 10000; // 成本单价保留4位小数
     
     // 记录中的持仓金额（用于显示）
     const amount = reduceUnits * netValue;
@@ -854,6 +853,21 @@ export default function Portfolio() {
       setReducePositionLoading(false);
     }
   };
+
+  // 图表选择器列表：优先用 fund-list 接口，无则用持仓表格数据，保证有持仓时必有选项
+  const chartSelectorFunds = useMemo(() => {
+    if (fundList.length > 0) return fundList;
+    return fundRows.map((r) => ({ code: r.code, name: r.name || `基金${r.code}` }));
+  }, [fundList, fundRows]);
+
+  // 图表选择器与列表同步：当选中的基金不在当前列表中时，改为列表第一项
+  useEffect(() => {
+    if (chartSelectorFunds.length === 0) return;
+    const exists = chartFund && chartSelectorFunds.some((f) => f.code === chartFund.code);
+    if (!exists) {
+      startTransition(() => setChartFund(chartSelectorFunds[0]));
+    }
+  }, [chartSelectorFunds, chartFund?.code]);
 
   const displayFundRows = useMemo(() => {
     const today = getTodayStr();
@@ -1041,7 +1055,8 @@ export default function Portfolio() {
                   <select
                     value={chartFund?.code || ''}
                     onChange={(e) => {
-                      const f = fundList.find((x) => x.code === e.target.value);
+                      const code = e.target.value;
+                      const f = chartSelectorFunds.find((x) => x.code === code);
                       if (f) setChartFund(f);
                     }}
                     style={{
@@ -1054,7 +1069,7 @@ export default function Portfolio() {
                       fontSize: 'var(--font-size-md)',
                     }}
                   >
-                    {fundList.map((f) => (
+                    {chartSelectorFunds.map((f) => (
                       <option key={f.code} value={f.code}>
                         {f.code} - {f.name}
                       </option>

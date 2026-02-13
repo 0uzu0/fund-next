@@ -30,9 +30,12 @@ export default function FundDetailModal({
   const estPctNum = toNum(row.estPct);
   const estNet = numMatch && Number.isFinite(estPctNum) ? (parseFloat(numMatch[1]) * (1 + estPctNum / 100)).toFixed(4) : '—';
 
+  const valuationTime = row.nowTime && String(row.nowTime).trim() && row.nowTime !== '—' ? String(row.nowTime) : '—';
+
   return (
     <div className="sector-modal active" style={{ display: 'flex' }} onClick={onClose}>
-      <div className="sector-modal-content fund-detail-modal" style={{ maxWidth: 480, width: '95%' }} onClick={(e) => e.stopPropagation()}>
+      <div className="sector-modal-content fund-detail-modal" style={{ maxWidth: 480, width: '95%', position: 'relative', paddingTop: 40 }} onClick={(e) => e.stopPropagation()}>
+        <button type="button" title="关闭" style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 4, fontSize: '1.2rem', lineHeight: 1 }} onClick={onClose}>×</button>
         <div className="fund-detail-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: '1.2rem' }} title="自选">⭐</span>
@@ -41,10 +44,7 @@ export default function FundDetailModal({
               <div className="fund-detail-code" style={{ color: 'var(--text-dim)', marginTop: 4 }}>#{row.code}</div>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ color: 'var(--text-dim)' }}>估值时间 {row.nowTime && row.nowTime !== '—' ? new Date().toISOString().slice(0, 10) + ' ' + row.nowTime : '—'}</span>
-            <button type="button" title="关闭" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 4 }} onClick={onClose}>🗑</button>
-          </div>
+          <span style={{ color: 'var(--text-dim)' }}>估值时间 {valuationTime}</span>
         </div>
         <div className="fund-detail-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', marginBottom: 16 }}>
           <div><span style={{ color: 'var(--text-dim)' }}>单位净值</span><div className="fund-detail-value" style={{ fontWeight: 600, marginTop: 2 }}>{unitNet}</div></div>

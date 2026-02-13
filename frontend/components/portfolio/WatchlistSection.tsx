@@ -208,7 +208,7 @@ export default function WatchlistSection({
                   title="点击查看详情"
                 >{String(r.code ?? '')}</td>
                 <td
-                  style={{ textAlign: 'left', cursor: 'pointer', color: 'var(--accent)' }}
+                  style={{ textAlign: 'left', cursor: 'pointer', color: '#fff' }}
                   onClick={() => onRowDetail(r)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowDetail(r); } }}
                   role="button"
