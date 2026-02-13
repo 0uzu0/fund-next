@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import { apiGet } from '../utils/apiClient';
+import { apiGet, clearCache } from '../utils/apiClient';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -124,6 +124,7 @@ function PreciousMetals() {
   }, [auth]);
 
   const refresh = () => {
+    clearCache('api/gold');
     loadRealTime();
     loadOneDay();
     loadHistory();

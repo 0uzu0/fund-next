@@ -20,6 +20,8 @@ type WatchlistSectionProps = {
   addInput: string;
   onAddInputChange: (v: string) => void;
   addSuggestions: { code: string; name: string }[];
+  /** 联想接口请求中时为 true，用于下拉显示「加载中」 */
+  addSuggestionsLoading?: boolean;
   showSuggestions: boolean;
   onShowSuggestions: (v: boolean) => void;
   onSelectSuggestion: (code: string, name: string) => void;
@@ -32,6 +34,8 @@ type WatchlistSectionProps = {
   onRowDetail: (row: FundRow) => void;
   onEditHolding: (row: FundRow) => void;
   onRemoveFromGroup: (code: string) => void;
+  /** 当前数据源：天天基金不提供连涨/跌、近30天，用于显示提示 */
+  dataSource?: 'fund123' | 'tiantian';
 };
 
 const COLS = [
@@ -59,6 +63,7 @@ export default function WatchlistSection({
   addInput,
   onAddInputChange,
   addSuggestions,
+  addSuggestionsLoading = false,
   showSuggestions,
   onShowSuggestions,
   onSelectSuggestion,
@@ -71,7 +76,9 @@ export default function WatchlistSection({
   onRowDetail,
   onEditHolding,
   onRemoveFromGroup,
+  dataSource,
 }: WatchlistSectionProps) {
+  const tiantianNoDataTitle = dataSource === 'tiantian' ? '天天基金不提供该数据，可切换 Fund123 查看' : undefined;
   const handleSort = (col: number) => {
     const nextDir = sort?.col === col
       ? (sort.dir === 'asc' ? 'desc' : null)
@@ -121,10 +128,10 @@ export default function WatchlistSection({
               borderRadius: 6,
               background: 'var(--gh-bg-primary)',
               color: 'var(--text-main)',
-              fontSize: 'var(--font-size-xs)',
+              fontSize: 'var(--font-size-md)',
             }}
           />
-          {showSuggestions && addSuggestions.length > 0 && (
+          {showSuggestions && (addSuggestions.length > 0 || addSuggestionsLoading) && (
             <ul
               style={{
                 position: 'absolute',
@@ -144,21 +151,25 @@ export default function WatchlistSection({
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
               }}
             >
-              {addSuggestions.map((f) => (
-                <li
-                  key={f.code}
-                  style={{
-                    padding: '10px 14px',
-                    cursor: 'pointer',
-                    borderBottom: '1px solid var(--gh-border-secondary)',
-                    color: 'var(--text-main)',
-                    fontSize: 'var(--font-size-xs)',
-                  }}
-                  onMouseDown={(e) => { e.preventDefault(); onSelectSuggestion(f.code, f.name); onShowSuggestions(false); }}
-                >
-                  <span style={{ color: 'var(--accent)' }}>{f.code}</span> {f.name}
-                </li>
-              ))}
+              {addSuggestionsLoading && addSuggestions.length === 0 ? (
+                <li style={{ padding: '10px 14px', color: 'var(--text-dim)', fontSize: 'var(--font-size-md)' }}>加载中…</li>
+              ) : (
+                addSuggestions.map((f) => (
+                  <li
+                    key={f.code}
+                    style={{
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--gh-border-secondary)',
+                      color: 'var(--text-main)',
+                      fontSize: 'var(--font-size-md)',
+                    }}
+                    onMouseDown={(e) => { e.preventDefault(); onSelectSuggestion(f.code, f.name); onShowSuggestions(false); }}
+                  >
+                    <span style={{ color: 'var(--accent)' }}>{f.code}</span> {f.name}
+                  </li>
+                ))
+              )}
             </ul>
           )}
         </div>
@@ -218,8 +229,8 @@ export default function WatchlistSection({
                 <td style={{ fontFamily: 'var(--font-mono)' }}>{r.netValue != null && r.netValue !== '' ? String(r.netValue) : '—'}</td>
                 <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{r.estPct != null && String(r.estPct) !== '' ? formatPct(r.estPct) : '—'}</td>
                 <td className={String(r.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{r.dayOfGrowth != null && r.dayOfGrowth !== '' ? String(r.dayOfGrowth) : '—'}</td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }} title={((r.consecutiveInfo == null || r.consecutiveInfo === '') && tiantianNoDataTitle) || undefined}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
+                <td style={{ fontFamily: 'var(--font-mono)' }} title={((r.monthlyInfo == null || r.monthlyInfo === '') && tiantianNoDataTitle) || undefined}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
                 <td>
                   {selectedGroupId !== null && isDefaultGroup ? (
                     <button type="button" className="btn btn-success" style={{ padding: '6px 12px' }} onClick={() => onEditHolding(r)}>修改持仓</button>

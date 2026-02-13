@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { apiGet, apiDelete } from '../utils/apiClient';
+import { apiGet, apiDelete, clearCache } from '../utils/apiClient';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 /** 开发时未配置 NEXT_PUBLIC_API_URL 时请求会发往 3000 导致 404，此处回退到后端 8311（仅用于客户端 fetch） */
@@ -84,8 +84,19 @@ function PositionRecords() {
   }, []);
 
   useEffect(() => {
-    // 直接请求持仓记录接口，避免先请求 /api/auth/me 导致跳转；401 时再跳登录
     fetchRecords();
+  }, [fetchRecords]);
+
+  // 从持仓页加减仓后切回本页时强制刷新列表（避免缓存导致不显示新记录）
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        clearCache('api/fund/position-records');
+        fetchRecords();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, [fetchRecords]);
 
   const onUndo = useCallback((rec: PositionRecord) => {

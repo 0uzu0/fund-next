@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import { apiGet } from '../utils/apiClient';
+import { apiGet, clearCache } from '../utils/apiClient';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -15,13 +15,14 @@ function Market() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchKx = useCallback(() => {
+  const fetchKx = useCallback((skipCache = false) => {
+    if (skipCache) clearCache('api/market/kx');
     setLoading(true);
     setError(null);
     const base = (API || '').replace(/\/$/, '');
     const url = base ? `${base}/api/market/kx?count=20` : '/api/market/kx?count=20';
     
-    // 使用 API 客户端，带缓存（5分钟）
+    // 使用 API 客户端，带缓存（5分钟）；刷新时已清缓存
     apiGet<{ success: boolean; list?: KxItem[]; message?: string }>(url, {
       cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
     })
@@ -70,7 +71,7 @@ function Market() {
               📰 7*24快讯
               <button
                 type="button"
-                onClick={fetchKx}
+                onClick={() => fetchKx(true)}
                 disabled={loading}
                 style={{
                   padding: '8px 16px',

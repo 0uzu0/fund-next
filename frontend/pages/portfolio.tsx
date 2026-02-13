@@ -73,6 +73,9 @@ export default function Portfolio() {
   const [watchlistRows, setWatchlistRows] = useState<FundRow[]>([]);
   const [addInput, setAddInput] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestList, setSuggestList] = useState<{ code: string; name: string }[]>([]);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [addLoading, setAddLoading] = useState(false);
   const [addError, setAddError] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
@@ -473,13 +476,36 @@ export default function Portfolio() {
     );
   };
 
-  const addSuggestions = addInput.trim()
-    ? fundList.filter(
-        (f) =>
-          f.code.includes(addInput.trim()) ||
-          (f.name && f.name.includes(addInput.trim()))
-      ).slice(0, 8)
-    : [];
+  // 联想搜索：输入时防抖请求后端 suggest 接口（东方财富，参考 real-time-fund）
+  useEffect(() => {
+    const keyword = addInput.trim();
+    if (suggestTimeoutRef.current) {
+      clearTimeout(suggestTimeoutRef.current);
+      suggestTimeoutRef.current = null;
+    }
+    if (!keyword) {
+      setSuggestList([]);
+      setSuggestLoading(false);
+      return;
+    }
+    setSuggestLoading(true);
+    suggestTimeoutRef.current = setTimeout(() => {
+      suggestTimeoutRef.current = null;
+      fetch(`${API}/api/fund/suggest?key=${encodeURIComponent(keyword)}`, { credentials: 'include' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && Array.isArray(d.list)) setSuggestList(d.list);
+          else setSuggestList([]);
+        })
+        .catch(() => setSuggestList([]))
+        .finally(() => setSuggestLoading(false));
+    }, 300);
+    return () => {
+      if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
+    };
+  }, [addInput]);
+
+  const addSuggestions = suggestList;
 
   const onRemoveFromGroup = async (code: string) => {
     if (selectedGroupId == null) return;
@@ -753,6 +779,7 @@ export default function Portfolio() {
       });
       const d = await res.json();
       if (d.success) {
+        clearCache('api/fund/position-records');
         const settlementDate = addDaysToDate(buyDate, isAfter15 ? 2 : 1);
         const next = [...loadPendingAdds(), { fundCode: addPositionRow.code, amount, settlementDate }];
         try {
@@ -776,7 +803,7 @@ export default function Portfolio() {
     if (!reducePositionRow) return;
     const reduceUnits = parseFloat(reducePositionUnits);
     if (!(reduceUnits > 0)) {
-      alert('请填写减仓份额');
+      alert('请填写同步减仓份额');
       return;
     }
     if (!reducePositionTime?.date) {
@@ -803,7 +830,7 @@ export default function Portfolio() {
     const oldUnits = toNum(reducePositionRow.holding_units);
     const oldCost = toNum(reducePositionRow.cost_per_unit) || 1;
     if (reduceUnits > oldUnits) {
-      alert('减仓份额不能大于当前持有份额');
+      alert('同步减仓份额不能大于当前持有份额');
       return;
     }
     let newUnitsRaw = Math.max(0, oldUnits - reduceUnits);
@@ -840,15 +867,15 @@ export default function Portfolio() {
       });
       const d = await res.json();
       if (d.success) {
-        // 同步减仓，立即更新，不保存到pendingReduces
+        clearCache('api/fund/position-records');
         setReducePositionRow(null);
         fetchData();
         fetchWatchlist();
       } else {
-        alert(d.message || '减仓失败');
+        alert(d.message || '同步减仓失败');
       }
     } catch (e) {
-      alert('减仓失败: ' + (e instanceof Error ? e.message : String(e)));
+      alert('同步减仓失败: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setReducePositionLoading(false);
     }
@@ -1005,6 +1032,7 @@ export default function Portfolio() {
               if (typeof window !== 'undefined') localStorage.setItem('portfolio_data_source', v);
               clearCache('portfolio/table');
               clearCache('chart-data');
+              // 切换数据源时只更新：预估收益、预估涨跌、今日涨幅、图表（实际收益/昨日涨幅/连涨跌/近30天由后端主备合并，不随切换变化）
               fetchData(v);
               if (selectedGroupId != null) fetchWatchlist(v);
             }}
@@ -1627,7 +1655,7 @@ export default function Portfolio() {
             />
           </section>
 
-          <section className="portfolio-block" aria-label="持有基金">
+          <section className="portfolio-block portfolio-fund-table" aria-label="持有基金">
             <HoldingTable
             rows={holdingRowsForPage}
             totalCount={sortedHoldingRows.length}
@@ -1646,7 +1674,7 @@ export default function Portfolio() {
           />
           </section>
 
-          <section className="portfolio-block" aria-label="自选基金">
+          <section className="portfolio-block portfolio-fund-table" aria-label="自选基金">
             <WatchlistSection
             groups={groups}
             selectedGroupId={selectedGroupId}
@@ -1664,6 +1692,7 @@ export default function Portfolio() {
             addInput={addInput}
             onAddInputChange={(v) => { setAddInput(v); setShowSuggestions(true); setAddError(''); }}
             addSuggestions={addSuggestions}
+            addSuggestionsLoading={suggestLoading}
             showSuggestions={showSuggestions}
             onShowSuggestions={setShowSuggestions}
             onSelectSuggestion={(code, name) => { setAddInput(`${code} - ${name}`); setShowSuggestions(false); }}
@@ -1676,6 +1705,7 @@ export default function Portfolio() {
             onRowDetail={setDetailRow}
             onEditHolding={openEditHolding}
             onRemoveFromGroup={onRemoveFromGroup}
+            dataSource={dataSource}
           />
           </section>
 
@@ -1701,38 +1731,36 @@ export default function Portfolio() {
             onSave={onSaveEditHolding}
           />
 
-          {/* 加仓弹窗（参照 openAddPositionModal） */}
+          {/* 加仓弹窗（参照 openAddPositionModal），字号与基金详情一致 */}
           {addPositionRow && (
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !addPositionLoading && setAddPositionRow(null)}>
-              <div className="sector-modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+              <div className="sector-modal-content position-modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700 }}>同步加仓</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setAddPositionRow(null)}>×</button>
+                  <span className="position-modal-title" style={{ fontWeight: 700 }}>同步加仓</span>
+                  <button type="button" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setAddPositionRow(null)}>×</button>
                 </div>
                 <div style={{ padding: '16px 0' }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{addPositionRow.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 12 }}>{addPositionRow.code}</div>
+                  <div className="position-modal-title" style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>{addPositionRow.name}</div>
+                  <div style={{ color: 'var(--text-dim)', marginBottom: 12 }}>#{addPositionRow.code}</div>
                   <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--gh-bg-tertiary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
+                    <div style={{ color: 'var(--text-dim)' }}>
                       最新净值 {(() => {
-                        // 从 netValue 中提取日期，格式可能是 "3.2486(02-12)" 或 "3.2486"
                         const netValueStr = addPositionRow.netValue || '';
                         const dateMatch = netValueStr.match(/\((\d{2}-\d{2})\)/);
                         const dateStr = dateMatch ? dateMatch[1] : '';
                         return dateStr ? `(${dateStr})` : '';
-                      })()} <span style={{ fontWeight: 700, color: 'var(--text-main)', marginLeft: 4 }}>{(() => {
-                        // 提取净值数字部分，去掉日期
+                      })()} <span className="position-modal-value" style={{ fontWeight: 700, color: 'var(--text-main)', marginLeft: 4 }}>{(() => {
                         const netValueStr = addPositionRow.netValue || '';
                         const numMatch = netValueStr.match(/^([\d.]+)/);
                         return numMatch ? numMatch[1] : (addPositionRow.netValue ?? '—');
                       })()}</span>
-                      <span className={toNum(addPositionRow.estPct) >= 0 ? 'positive' : 'negative'} style={{ marginLeft: 6, fontWeight: 600 }}>{addPositionRow.estPct != null ? formatPct(addPositionRow.estPct) : ''}</span>
+                      <span className={`position-modal-value ${toNum(addPositionRow.estPct) >= 0 ? 'positive' : 'negative'}`} style={{ marginLeft: 6, fontWeight: 600 }}>{addPositionRow.estPct != null ? formatPct(addPositionRow.estPct) : ''}</span>
                     </div>
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>同步加仓金额</div>
+                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>同步加仓金额</div>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                      <span style={{ position: 'absolute', left: 12, color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)', zIndex: 1 }}>¥</span>
+                      <span style={{ position: 'absolute', left: 12, color: 'var(--text-dim)', zIndex: 1 }}>¥</span>
                       <input
                         type="number"
                         step="0.01"
@@ -1741,12 +1769,12 @@ export default function Portfolio() {
                         value={addPositionAmount}
                         onChange={(e) => setAddPositionAmount(e.target.value)}
                         className="sector-modal-search"
-                        style={{ width: '100%', padding: '10px 12px 10px 24px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}
+                        style={{ width: '100%', padding: '10px 12px 10px 24px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', color: 'var(--text-main)' }}
                       />
                     </div>
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>买入费率</div>
+                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>买入费率</div>
                     <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
                       {([0, 0.1, 0.15] as const).map((rate) => (
                         <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
@@ -1757,12 +1785,12 @@ export default function Portfolio() {
                             onChange={() => setAddPositionFeeRate(rate)} 
                             style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }} 
                           />
-                          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}>{rate}%</span>
+                          <span style={{ color: 'var(--text-main)' }}>{rate}%</span>
                         </label>
                       ))}
                     </div>
                     {addPositionAmount && (
-                      <div style={{ marginTop: 8, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
+                      <div style={{ marginTop: 8, color: 'var(--text-dim)' }}>
                         {(() => {
                           const inputAmount = parseFloat(addPositionAmount) || 0;
                           const fee = inputAmount * addPositionFeeRate / 100;
@@ -1776,7 +1804,7 @@ export default function Portfolio() {
                               <>
                                 <div>手续费：¥{fee.toFixed(2)}</div>
                                 <div>实际买入金额：¥{actualAmount.toFixed(2)}</div>
-                                <div style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
+                                <div className="position-modal-value" style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
                                   加仓后持仓金额：¥{newHoldingAmount.toFixed(2)}
                                 </div>
                               </>
@@ -1791,7 +1819,7 @@ export default function Portfolio() {
                     )}
                   </div>
                   <div style={{ marginTop: 20 }}>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-main)', marginBottom: 8 }}>原平台买入时间</div>
+                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>原平台买入时间</div>
                     <div
                       role="button"
                       tabIndex={0}
@@ -1799,8 +1827,8 @@ export default function Portfolio() {
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAddPositionTimePickerOpen(true); } }}
                       style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--gh-bg-tertiary)', color: addPositionTime ? 'var(--text-main)' : 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      <span style={{ fontSize: 'var(--font-size-xs)' }}>{addPositionTime ? `${addPositionTime.date.slice(5, 7)}月${addPositionTime.date.slice(8)}日 ${addPositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
-                      <span style={{ color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>▼</span>
+                      <span>{addPositionTime ? `${addPositionTime.date.slice(5, 7)}月${addPositionTime.date.slice(8)}日 ${addPositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
+                      <span style={{ color: 'var(--text-dim)' }}>▼</span>
                     </div>
                   </div>
                 </div>
@@ -1812,12 +1840,12 @@ export default function Portfolio() {
             </div>
           )}
 
-          {/* 加仓时间选择器 */}
+          {/* 加仓时间选择器，字号与基金详情一致 */}
           {addPositionRow && addPositionTimePickerOpen && (
             <>
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10001 }} onClick={() => setAddPositionTimePickerOpen(false)} />
-              <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', background: 'var(--card-bg)', borderRadius: 12, padding: 16, maxHeight: 320, overflowY: 'auto', zIndex: 10002, minWidth: 260 }}>
-                <div style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-main)' }}>选择买入时间</div>
+              <div className="position-modal" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', background: 'var(--card-bg)', borderRadius: 12, padding: 16, maxHeight: 320, overflowY: 'auto', zIndex: 10002, minWidth: 260 }}>
+                <div className="position-modal-title" style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-main)' }}>选择买入时间</div>
                 {(() => {
                   const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
                   const options: { date: string; period: 'before15' | 'after15'; label: string }[] = [];
@@ -1837,7 +1865,7 @@ export default function Portfolio() {
                       key={opt.date + opt.period}
                       role="button"
                       tabIndex={0}
-                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-xs)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: addPositionTime?.date === opt.date && addPositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: addPositionTime?.date === opt.date && addPositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
                       onClick={() => { setAddPositionTime({ date: opt.date, period: opt.period }); setAddPositionTimePickerOpen(false); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAddPositionTime({ date: opt.date, period: opt.period }); setAddPositionTimePickerOpen(false); } }}
                     >
@@ -1849,37 +1877,37 @@ export default function Portfolio() {
             </>
           )}
 
-          {/* 减仓弹窗（参照 openReducePositionModal） */}
+          {/* 同步减仓弹窗，字号与基金详情一致 */}
           {reducePositionRow && (
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !reducePositionLoading && setReducePositionRow(null)}>
-              <div className="sector-modal-content" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
+              <div className="sector-modal-content position-modal" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
                 <div className="sector-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>减仓</span>
-                  <button type="button" style={{ background: 'none', border: 'none', fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReducePositionRow(null)}>×</button>
+                  <span className="position-modal-title" style={{ fontWeight: 700 }}>同步减仓</span>
+                  <button type="button" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReducePositionRow(null)}>×</button>
                 </div>
                 <div style={{ padding: '16px 0' }}>
-                  <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 600, color: 'var(--text-main)' }}>{reducePositionRow.name}</div>
-                  <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginTop: 2 }}>{reducePositionRow.code}</div>
-                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
-                    当前净值 <span style={{ fontWeight: 600, color: 'var(--text-main)', marginLeft: 8 }}>{reducePositionRow.netValue ?? '—'}</span>
-                    <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginLeft: 8 }}>持有份额</span>
-                    <span style={{ fontWeight: 500, marginLeft: 4 }}>{(reducePositionRow.holding_units ?? 0).toFixed(2)}</span>
+                  <div className="position-modal-title" style={{ fontWeight: 600, color: 'var(--text-main)' }}>{reducePositionRow.name}</div>
+                  <div style={{ color: 'var(--text-dim)', marginTop: 2 }}>#{reducePositionRow.code}</div>
+                  <div style={{ marginTop: 12, color: 'var(--text-dim)' }}>
+                    当前净值 <span className="position-modal-value" style={{ fontWeight: 600, color: 'var(--text-main)', marginLeft: 8 }}>{reducePositionRow.netValue ?? '—'}</span>
+                    <span style={{ color: 'var(--text-dim)', marginLeft: 8 }}>持有份额</span>
+                    <span className="position-modal-value" style={{ fontWeight: 500, marginLeft: 4 }}>{(reducePositionRow.holding_units ?? 0).toFixed(2)}</span>
                   </div>
                   <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                    <span style={{ color: 'var(--text-dim)', marginRight: 8 }}>减仓份额</span>
+                    <span style={{ color: 'var(--text-dim)', marginRight: 8 }}>同步减仓份额</span>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      placeholder="请输入减仓份额"
+                      placeholder="请输入同步减仓份额"
                       value={reducePositionUnits}
                       onChange={(e) => setReducePositionUnits(e.target.value)}
                       className="sector-modal-search"
-                      style={{ flex: 1, border: 'none', background: 'none', padding: '10px 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-main)' }}
+                      style={{ flex: 1, border: 'none', background: 'none', padding: '10px 0', color: 'var(--text-main)' }}
                     />
                     <span style={{ color: 'var(--text-dim)' }}>份</span>
                   </div>
-                  <div style={{ marginTop: 12, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
+                  <div style={{ marginTop: 12, color: 'var(--text-dim)' }}>
                     赎回费率：
                     {([0, 0.5, 1, 1.5] as const).map((rate) => (
                       <label key={rate} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginLeft: 12 }}>
@@ -1889,7 +1917,7 @@ export default function Portfolio() {
                     ))}
                   </div>
                   {reducePositionUnits && reducePositionTime && (
-                    <div style={{ marginTop: 8, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>
+                    <div style={{ marginTop: 8, color: 'var(--text-dim)' }}>
                       {(() => {
                         const units = parseFloat(reducePositionUnits) || 0;
                         const netValue = parseNetValue(reducePositionRow.netValue) || 1;
@@ -1902,12 +1930,12 @@ export default function Portfolio() {
                         const fee = amount * reducePositionFeeRate / 100;
                         return (
                           <>
-                            <div>减仓金额：¥{amount.toFixed(2)}</div>
+                            <div>同步减仓金额：¥{amount.toFixed(2)}</div>
                             {reducePositionFeeRate > 0 && (
                               <div style={{ marginTop: 4 }}>手续费：¥{fee.toFixed(2)}</div>
                             )}
-                            <div style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
-                              减仓后持仓金额：¥{newHoldingAmount.toFixed(2)}
+                            <div className="position-modal-value" style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
+                              同步减仓后持仓金额：¥{newHoldingAmount.toFixed(2)}
                             </div>
                           </>
                         );
@@ -1915,7 +1943,7 @@ export default function Portfolio() {
                     </div>
                   )}
                   <div style={{ marginTop: 16 }}>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginBottom: 6 }}>卖出时间</div>
+                    <div style={{ color: 'var(--text-dim)', marginBottom: 6 }}>卖出时间</div>
                     <div
                       role="button"
                       tabIndex={0}
@@ -1923,7 +1951,7 @@ export default function Portfolio() {
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setReducePositionTimePickerOpen(true); } }}
                       style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--card-bg)', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                     >
-                      <span style={{ fontSize: 'var(--font-size-xs)' }}>{reducePositionTime ? `${reducePositionTime.date.slice(5, 7)}月${reducePositionTime.date.slice(8)}日 ${reducePositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
+                      <span>{reducePositionTime ? `${reducePositionTime.date.slice(5, 7)}月${reducePositionTime.date.slice(8)}日 ${reducePositionTime.period === 'after15' ? '下午3点后' : '下午3点前'}` : '请选择时间'}</span>
                       <span style={{ color: 'var(--text-dim)' }}>▼</span>
                     </div>
                   </div>
@@ -1936,12 +1964,12 @@ export default function Portfolio() {
             </div>
           )}
 
-          {/* 减仓时间选择器 */}
+          {/* 同步减仓时间选择器，字号与基金详情一致 */}
           {reducePositionRow && reducePositionTimePickerOpen && (
             <>
               <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10001 }} onClick={() => setReducePositionTimePickerOpen(false)} />
-              <div style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', background: 'var(--card-bg)', borderRadius: 12, padding: 16, maxHeight: 320, overflowY: 'auto', zIndex: 10002, minWidth: 260 }}>
-                <div style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-main)' }}>选择卖出时间</div>
+              <div className="position-modal" style={{ position: 'fixed', left: '50%', top: '50%', transform: 'translate(-50%, -50%)', background: 'var(--card-bg)', borderRadius: 12, padding: 16, maxHeight: 320, overflowY: 'auto', zIndex: 10002, minWidth: 260 }}>
+                <div className="position-modal-title" style={{ marginBottom: 8, fontWeight: 600, color: 'var(--text-main)' }}>选择卖出时间</div>
                 {(() => {
                   const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
                   const options: { date: string; period: 'before15' | 'after15'; label: string }[] = [];
@@ -1961,7 +1989,7 @@ export default function Portfolio() {
                       key={opt.date + opt.period}
                       role="button"
                       tabIndex={0}
-                      style={{ padding: '8px 12px', fontSize: 'var(--font-size-xs)', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: reducePositionTime?.date === opt.date && reducePositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
+                      style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border)', color: 'var(--text-main)', background: reducePositionTime?.date === opt.date && reducePositionTime?.period === opt.period ? 'rgba(59, 130, 246, 0.15)' : 'transparent' }}
                       onClick={() => { setReducePositionTime({ date: opt.date, period: opt.period }); setReducePositionTimePickerOpen(false); }}
                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setReducePositionTime({ date: opt.date, period: opt.period }); setReducePositionTimePickerOpen(false); } }}
                     >

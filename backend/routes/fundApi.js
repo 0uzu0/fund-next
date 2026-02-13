@@ -29,6 +29,48 @@ function parseFundCodes(codes) {
   return [];
 }
 
+// ---------- 基金联想搜索（东方财富 suggest，参考 real-time-fund）----------
+router.get('/api/fund/suggest', async (req, res) => {
+  const key = String(req.query.key || '').trim();
+  if (!key) return res.json({ success: true, list: [] });
+  const callbackName = '__fund_suggest_' + Date.now();
+  const url = `https://fundsuggest.eastmoney.com/FundSearch/api/FundSearchAPI.ashx?m=1&key=${encodeURIComponent(key)}&callback=${callbackName}&_=${Date.now()}`;
+  try {
+    const { data: raw } = await axios.get(url, { timeout: 8000, responseType: 'text' });
+    const start = raw.indexOf('(');
+    const end = raw.lastIndexOf(')');
+    const jsonStr = start >= 0 && end > start ? raw.slice(start + 1, end) : raw;
+    const data = JSON.parse(jsonStr);
+    let list = (data && data.Datas) ? data.Datas : [];
+    list = list
+      .filter((d) => d.CATEGORY === 700 || d.CATEGORY === '700' || (d.CATEGORYDESC && d.CATEGORYDESC.includes('基金')))
+      .map((d) => ({ code: String(d.CODE || d.code || ''), name: String(d.NAME || d.SHORTNAME || d.name || '') }))
+      .filter((d) => d.code && d.name)
+      .slice(0, 20);
+    return res.json({ success: true, list });
+  } catch (e) {
+    console.error('基金联想接口失败:', e.message);
+    return res.json({ success: false, list: [], message: e.message });
+  }
+});
+
+// ---------- 天天基金接口连通性自检（无需登录，用于排查数据源不可用）----------
+router.get('/api/fund/tiantian-test', async (req, res) => {
+  const code = String(req.query.code || '000001').trim();
+  const start = Date.now();
+  try {
+    const data = await tiantianFund.fetchFundGz(code);
+    const durationMs = Date.now() - start;
+    if (data) {
+      return res.json({ ok: true, code, data, durationMs });
+    }
+    return res.json({ ok: false, code, durationMs, message: '接口未返回有效数据（超时或解析失败）' });
+  } catch (e) {
+    const durationMs = Date.now() - start;
+    return res.json({ ok: false, code, durationMs, message: String(e.message), error: e.code });
+  }
+});
+
 // ---------- 基金数据（与原项目 database.get_user_funds 一致）----------
 router.get('/api/fund/data', loginRequired, (req, res) => {
   try {
@@ -420,6 +462,7 @@ router.post('/api/fund/groups', loginRequired, (req, res) => {
     const name = String((req.body.name || '').trim());
     if (!name) return res.status(400).json({ success: false, message: '请提供分组名称' });
     const userId = getCurrentUserId(req);
+    getOrCreateDefaultGroup(userId);
     const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM fund_groups WHERE user_id = ?').get(userId);
     const result = db.prepare('INSERT INTO fund_groups (user_id, name, fund_codes, sort_order) VALUES (?, ?, ?, ?)').run(userId, name, '[]', maxOrder.n);
     const groupId = result.lastInsertRowid;
@@ -489,6 +532,7 @@ router.post('/api/fund/groups/:id/funds', loginRequired, async (req, res) => {
     const code = String((req.body.code || req.body.fund_code || '').trim());
     if (!code) return res.status(400).json({ success: false, message: '请提供基金代码' });
     const userId = getCurrentUserId(req);
+    getOrCreateDefaultGroup(userId);
     const existing = db.prepare('SELECT fund_code FROM user_funds WHERE user_id = ? AND fund_code = ?').get(userId, code);
     if (!existing) {
       let key = code;
@@ -503,19 +547,19 @@ router.post('/api/fund/groups/:id/funds', loginRequired, async (req, res) => {
       ).run(userId, code, key, name);
     }
     const gid = req.params.id;
-    const group = db.prepare('SELECT id, fund_codes FROM fund_groups WHERE user_id = ? AND id = ?').get(userId, gid);
+    const group = db.prepare('SELECT id, fund_codes, sort_order FROM fund_groups WHERE user_id = ? AND id = ?').get(userId, gid);
     if (!group) return res.status(404).json({ success: false, message: '分组不存在' });
     const codes = group.fund_codes ? JSON.parse(group.fund_codes) : [];
     if (codes.includes(code)) return res.json({ success: true, message: '已在分组中' });
     codes.push(code);
     db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(codes), gid);
-    const defaultRow = db.prepare('SELECT id FROM fund_groups WHERE user_id = ? AND sort_order = 0 AND id != ? LIMIT 1').get(userId, gid);
-    if (defaultRow) {
-      const def = db.prepare('SELECT fund_codes FROM fund_groups WHERE id = ?').get(defaultRow.id);
+    const defaultGroup = getOrCreateDefaultGroup(userId);
+    if (defaultGroup && String(defaultGroup.id) !== String(gid)) {
+      const def = db.prepare('SELECT fund_codes FROM fund_groups WHERE id = ?').get(defaultGroup.id);
       const defCodes = def.fund_codes ? JSON.parse(def.fund_codes) : [];
       if (!defCodes.includes(code)) {
         defCodes.push(code);
-        db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(defCodes), defaultRow.id);
+        db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(defCodes), defaultGroup.id);
       }
     }
     res.json({ success: true, message: '已添加' });
@@ -531,10 +575,11 @@ router.delete('/api/fund/groups/:id/funds/:code', loginRequired, (req, res) => {
   if (!group) return res.status(404).json({ success: false, message: '分组不存在' });
   const codes = (group.fund_codes ? JSON.parse(group.fund_codes) : []).filter(c => c !== code);
   db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(codes), req.params.id);
-  const defaultRow = db.prepare('SELECT id, fund_codes FROM fund_groups WHERE user_id = ? AND sort_order = 0 LIMIT 1').get(userId);
-  if (defaultRow && String(defaultRow.id) !== String(req.params.id)) {
-    const defCodes = (defaultRow.fund_codes ? JSON.parse(defaultRow.fund_codes) : []).filter(c => c !== code);
-    db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(defCodes), defaultRow.id);
+  const defaultGroup = getOrCreateDefaultGroup(userId);
+  if (defaultGroup && String(defaultGroup.id) !== String(req.params.id)) {
+    const def = db.prepare('SELECT fund_codes FROM fund_groups WHERE id = ?').get(defaultGroup.id);
+    const defCodes = (def.fund_codes ? JSON.parse(def.fund_codes) : []).filter(c => c !== code);
+    db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(defCodes), defaultGroup.id);
   }
   res.json({ success: true, message: '已移除' });
 });
@@ -616,12 +661,46 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
     }
 
     const source = String(req.query.source || 'fund123').toLowerCase();
-    const searchCodeFn = source === 'tiantian' ? tiantianFund.searchCodeTiantian : fundQuotes.searchCode;
-
+    // 一主一备：实际收益、实际涨跌、昨日涨幅、连涨/跌、近30天 以 fund123 为主、天天为备；切换数据源时仅更新 预估收益、预估涨跌、今日涨幅
     let rows = [];
     try {
-      const resultRows = await searchCodeFn(fundMapForSearch);
-      rows = fundQuotes.buildPositionRows(resultRows, fundMapForHolding);
+      const [resultRows123, resultRowsTiantian] = await Promise.all([
+        fundQuotes.searchCode(fundMapForSearch).catch(() => []),
+        tiantianFund.searchCodeTiantian(fundMapForSearch).catch(() => []),
+      ]);
+      const byCode123 = new Map(resultRows123.map((r) => [r[0], r]));
+      const byCodeTT = new Map(resultRowsTiantian.map((r) => [r[0], r]));
+      const merged = [];
+      for (const code of Object.keys(fundMapForSearch)) {
+        const r123 = byCode123.get(code);
+        const rTT = byCodeTT.get(code);
+        // [code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo]
+        const name = (r123 && r123[1]) || (rTT && rTT[1]) || (fundMapForSearch[code] && fundMapForSearch[code].fund_name) || `基金${code}`;
+        // 当前数据源优先；当天天无有效数据时用 fund123 回填，不显示 "—"/"N/A"
+        const liveFromTT = source === 'tiantian' ? rTT : null;
+        const liveFrom123 = r123;
+        const nowTimeVal = (liveFromTT && liveFromTT[2] && String(liveFromTT[2]).trim() !== '—') ? liveFromTT[2] : (liveFrom123 && liveFrom123[2] && String(liveFrom123[2]).trim() !== '—' ? liveFrom123[2] : null);
+        const nowTime = nowTimeVal || '—';
+        const forecastVal = (liveFromTT && liveFromTT[4] && String(liveFromTT[4]).trim() !== 'N/A') ? liveFromTT[4] : (liveFrom123 && liveFrom123[4] && String(liveFrom123[4]).trim() !== 'N/A' ? liveFrom123[4] : null);
+        const forecastGrowth = forecastVal || 'N/A';
+        const netValuePrimary = r123 && r123[3] && String(r123[3]).trim() !== '—' ? r123[3] : null;
+        const netValueBackup = rTT && rTT[3] && String(rTT[3]).trim() !== '—' ? rTT[3] : null;
+        let netValue = netValuePrimary || netValueBackup || '—';
+        // 仅天天有数据时用 估值(今日) 作为净值，使 实际收益/实际涨跌 能按今日估值显示
+        if (!r123 && rTT && rTT[8] && String(rTT[8]).trim()) netValue = rTT[8];
+        const dayGrowthPrimary = r123 && r123[5] && String(r123[5]).trim() !== '—' ? r123[5] : null;
+        const dayGrowthBackup = rTT && rTT[5] && String(rTT[5]).trim() !== '—' ? rTT[5] : null;
+        const dayOfGrowth = dayGrowthPrimary || dayGrowthBackup || '—';
+        const consecutiveInfo = (r123 && r123[6] && String(r123[6]).trim() !== '—' ? r123[6] : null) || '—';
+        const monthlyInfo = (r123 && r123[7] && String(r123[7]).trim() !== '—' ? r123[7] : null) || '—';
+        merged.push([code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo]);
+      }
+      merged.sort((a, b) => {
+        const pctA = a[4] === 'N/A' ? -99 : parseFloat(String(a[4]).replace('%', ''));
+        const pctB = b[4] === 'N/A' ? -99 : parseFloat(String(b[4]).replace('%', ''));
+        return pctB - pctA;
+      });
+      rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
       if (rows.length === 0 && Object.keys(fundMapForHolding).length > 0) {
         rows = buildFallbackRows();
       }
@@ -921,16 +1000,6 @@ router.get('/api/timing', loginRequired, async (req, res) => {
     res.json({ success: true, data });
   } catch (e) {
     console.error('获取上证分时失败:', e.message);
-    res.status(500).json({ success: false, message: '数据加载失败', data: {} });
-  }
-});
-
-router.get('/api/indices/volume', loginRequired, async (req, res) => {
-  try {
-    const data = await marketIndices.fetchVolumeChartData();
-    res.json({ success: true, data });
-  } catch (e) {
-    console.error('获取成交量趋势失败:', e.message);
     res.status(500).json({ success: false, message: '数据加载失败', data: {} });
   }
 });

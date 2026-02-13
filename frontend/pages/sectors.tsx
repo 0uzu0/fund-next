@@ -1,7 +1,7 @@
-import { useEffect, useState, memo, useCallback } from 'react';
+import { useEffect, useState, memo, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { apiGet, apiPost } from '../utils/apiClient';
+import { apiGet, apiPost, clearCache } from '../utils/apiClient';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -57,6 +57,8 @@ function Sectors() {
   const [showAddToGroupModal, setShowAddToGroupModal] = useState(false);
   const [selectedFundCode, setSelectedFundCode] = useState<string | null>(null);
   const [addToGroupLoading, setAddToGroupLoading] = useState(false);
+  const [addSuccessMessage, setAddSuccessMessage] = useState<string | null>(null);
+  const [sectorFundsSort, setSectorFundsSort] = useState<{ col: 'day_growth'; dir: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     // 使用 API 客户端，带缓存
@@ -116,12 +118,26 @@ function Sectors() {
     if (auth && tab === 'sectors') loadSectors();
   }, [auth, tab, loadSectors]);
 
+  const loadGroups = useCallback(() => {
+    clearCache('api/fund/groups');
+    apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>(apiBase + '/api/fund/groups')
+      .then((res) => {
+        if (res.success && Array.isArray(res.groups)) {
+          setGroups(res.groups);
+          const defaultGroup = res.groups.find((g: any) => g.sort_order === 0);
+          if (defaultGroup) {
+            setDefaultGroupId(defaultGroup.id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (auth && tab === 'query') {
       loadSectorList();
-      // 加载分组列表，使用 API 客户端，带缓存（10分钟）
       apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>(apiBase + '/api/fund/groups', {
-        cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
+        cache: { ttl: 10 * 60 * 1000 },
       })
         .then((res) => {
           if (res.success && Array.isArray(res.groups)) {
@@ -137,8 +153,13 @@ function Sectors() {
   }, [auth, tab, loadSectorList]);
 
   const refresh = () => {
-    if (tab === 'sectors') loadSectors();
-    else loadSectorList();
+    if (tab === 'sectors') {
+      clearCache('api/sectors');
+      loadSectors();
+    } else {
+      clearCache('api/sector-list');
+      loadSectorList();
+    }
   };
 
   const sectorListIndex = (name: string) => {
@@ -146,14 +167,22 @@ function Sectors() {
     return i >= 0 ? i + 1 : null;
   };
 
+  const fundCodesInGroups = useMemo(
+    () => new Set(groups.flatMap((g) => g.fund_codes || [])),
+    [groups]
+  );
+
   const handleAddToWatchlist = (fundCode: string) => {
     setSelectedFundCode(fundCode);
+    setAddSuccessMessage(null);
     setShowAddToGroupModal(true);
+    loadGroups();
   };
 
   const handleConfirmAddToGroup = async (groupId: number) => {
     if (!selectedFundCode) return;
     setAddToGroupLoading(true);
+    setAddSuccessMessage(null);
     try {
       const r = await fetch(`${apiBase}/api/fund/groups/${groupId}/funds`, {
         method: 'POST',
@@ -164,9 +193,15 @@ function Sectors() {
       const d = await r.json();
       if (d.success) {
         const group = groups.find((g) => g.id === groupId);
-        alert(`已添加基金 ${selectedFundCode} 到分组"${group?.name || '未知'}"（同时已添加到默认分组）`);
-        setShowAddToGroupModal(false);
-        setSelectedFundCode(null);
+        const groupName = group?.name || '未知';
+        setGroups((prev) =>
+          prev.map((g) =>
+            g.id === groupId
+              ? { ...g, fund_codes: [...(g.fund_codes || []), selectedFundCode] }
+              : g
+          )
+        );
+        setAddSuccessMessage(`已添加至「${groupName}」`);
       } else {
         alert(d.message || '添加失败');
       }
@@ -176,6 +211,23 @@ function Sectors() {
       setAddToGroupLoading(false);
     }
   };
+
+  const parseDayGrowth = (s: string): number => {
+    if (!s || s === '—' || s === '--') return 0;
+    const num = parseFloat(String(s).replace(/[%\s]/g, ''));
+    return Number.isFinite(num) ? num : 0;
+  };
+
+  const sortedSectorFunds = useMemo(() => {
+    const list = [...sectorFunds];
+    if (!sectorFundsSort || sectorFundsSort.col !== 'day_growth') return list;
+    list.sort((a, b) => {
+      const va = parseDayGrowth(a.day_growth);
+      const vb = parseDayGrowth(b.day_growth);
+      return sectorFundsSort.dir === 'desc' ? vb - va : va - vb;
+    });
+    return list;
+  }, [sectorFunds, sectorFundsSort]);
 
   const filteredCategories: Record<string, string[]> = sectorSearch.trim()
     ? Object.fromEntries(
@@ -362,30 +414,46 @@ function Sectors() {
                                 <th>基金代码</th>
                                 <th>基金名称</th>
                                 <th>净值</th>
-                                <th>日增长率</th>
+                                <th
+                                  className="sortable"
+                                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                                  onClick={() => setSectorFundsSort((prev) => (prev?.dir === 'desc' ? null : { col: 'day_growth', dir: prev?.dir === 'asc' ? 'desc' : 'asc' }))}
+                                >
+                                  日增长率
+                                  {sectorFundsSort?.col === 'day_growth' && (sectorFundsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                                </th>
                                 <th>操作</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {sectorFunds.slice(0, 100).map((row, i) => (
-                                <tr key={i}>
-                                  <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{row.code}</td>
-                                  <td>{row.name}</td>
-                                  <td style={{ fontFamily: 'var(--font-mono)' }}>{row.net_value}</td>
-                                  <td className={String(row.day_growth).startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{row.day_growth}</td>
-                                  <td>
-                                    <button
-                                      type="button"
-                                      className="btn btn-info"
-                                      style={{ padding: '6px 12px', fontSize: 'var(--font-size-sm)' }}
-                                      onClick={() => handleAddToWatchlist(row.code)}
-                                      disabled={addingFundCode === row.code || groups.length === 0}
-                                    >
-                                      添加
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                              {sortedSectorFunds.slice(0, 100).map((row, i) => {
+                                const isInGroup = fundCodesInGroups.has(row.code);
+                                return (
+                                  <tr key={i}>
+                                    <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{row.code}</td>
+                                    <td>{row.name}</td>
+                                    <td style={{ fontFamily: 'var(--font-mono)' }}>{row.net_value}</td>
+                                    <td className={String(row.day_growth).startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{row.day_growth}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="btn btn-info"
+                                        style={{
+                                          padding: '6px 12px',
+                                          fontSize: 'var(--font-size-sm)',
+                                          opacity: isInGroup ? 0.6 : 1,
+                                          cursor: isInGroup ? 'not-allowed' : 'pointer',
+                                        }}
+                                        onClick={() => !isInGroup && handleAddToWatchlist(row.code)}
+                                        disabled={addingFundCode === row.code || groups.length === 0 || isInGroup}
+                                        title={isInGroup ? '该基金已在分组中，从分组移除后可再次添加' : '添加到分组'}
+                                      >
+                                        {isInGroup ? '已添加' : '添加'}
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -400,6 +468,11 @@ function Sectors() {
                 <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !addToGroupLoading && setShowAddToGroupModal(false)}>
                   <div className="sector-modal-content" style={{ maxWidth: 400, width: '95%' }} onClick={(e) => e.stopPropagation()}>
                     <div className="sector-modal-header">选择分组</div>
+                    {addSuccessMessage && (
+                      <p style={{ margin: '0 0 12px', padding: '8px 12px', background: 'var(--gh-bg-secondary)', borderRadius: 8, color: 'var(--accent)', fontSize: 'var(--font-size-sm)' }}>
+                        {addSuccessMessage}
+                      </p>
+                    )}
                     <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 16 }}>
                       {groups.length === 0 ? (
                         <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: 20 }}>暂无分组，请先创建分组</p>
@@ -412,7 +485,7 @@ function Sectors() {
                             style={{
                               padding: '12px',
                               marginBottom: 8,
-                              cursor: 'pointer',
+                              cursor: addToGroupLoading ? 'wait' : 'pointer',
                               background: 'var(--gh-bg-tertiary)',
                               border: '1px solid var(--border)',
                               borderRadius: 8,
@@ -437,7 +510,7 @@ function Sectors() {
                       )}
                     </div>
                     <div className="sector-modal-footer">
-                      <button type="button" className="btn btn-secondary" onClick={() => setShowAddToGroupModal(false)} disabled={addToGroupLoading}>取消</button>
+                      <button type="button" className="btn btn-secondary" onClick={() => { setShowAddToGroupModal(false); setSelectedFundCode(null); setAddSuccessMessage(null); }} disabled={addToGroupLoading}>完成</button>
                     </div>
                   </div>
                 </div>

@@ -2,7 +2,7 @@ import { useEffect, useState, memo, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
-import { apiGet } from '../utils/apiClient';
+import { apiGet, clearCache } from '../utils/apiClient';
 
 // 动态导入图表组件，优化首屏加载
 const LineChart = dynamic(() => import('../components/LineChart'), {
@@ -31,20 +31,11 @@ type TimingData = {
   change_pct?: number;
 };
 
-type VolumeData = {
-  labels: string[];
-  total: number[];
-  sh: number[];
-  sz: number[];
-  bj: number[];
-};
-
 function MarketIndices() {
   const router = useRouter();
   const [auth, setAuth] = useState<{ username: string } | null>(null);
   const [indices, setIndices] = useState<IndexRow[]>([]);
   const [timing, setTiming] = useState<TimingData | null>(null);
-  const [volume, setVolume] = useState<VolumeData | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingChart, setLoadingChart] = useState(false);
 
@@ -73,29 +64,20 @@ function MarketIndices() {
 
   const loadCharts = useCallback(() => {
     setLoadingChart(true);
-    // 使用 API 客户端，带缓存（2分钟）
-    Promise.all([
-      apiGet<{ success: boolean; data?: TimingData }>(apiBase + '/api/timing', {
-        cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
-      }),
-      apiGet<{ success: boolean; data?: VolumeData }>(apiBase + '/api/indices/volume', {
-        cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
-      }),
-    ])
-      .then(([timingRes, volumeRes]) => {
-        if (timingRes.success && timingRes.data?.labels) setTiming(timingRes.data);
+    apiGet<{ success: boolean; data?: TimingData }>(apiBase + '/api/timing', {
+      cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
+    })
+      .then((res) => {
+        if (res.success && res.data?.labels) setTiming(res.data);
         else setTiming(null);
-        if (volumeRes.success && volumeRes.data?.labels) setVolume(volumeRes.data);
-        else setVolume(null);
       })
-      .catch(() => {
-        setTiming(null);
-        setVolume(null);
-      })
+      .catch(() => setTiming(null))
       .finally(() => setLoadingChart(false));
   }, []);
 
   const refresh = () => {
+    clearCache('api/indices');
+    clearCache('api/timing');
     loadIndices();
     loadCharts();
   };
@@ -124,7 +106,7 @@ function MarketIndices() {
               {loading || loadingChart ? '加载中…' : '🔄 刷新'}
             </button>
           </h1>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 24 }}>上证分时、全球指数与成交量趋势</p>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 24 }}>上证分时与全球指数</p>
 
           {/* 上证分时 */}
           <div className="content-card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
@@ -153,31 +135,6 @@ function MarketIndices() {
                 />
               ) : (
                 <p style={{ color: 'var(--text-dim)' }}>暂无分时数据（非交易时段或数据源暂时不可用），请稍后重试</p>
-              )}
-            </div>
-          </div>
-
-          {/* 成交量趋势 */}
-          <div className="content-card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontWeight: 600 }}>📊 成交量趋势（亿）</span>
-            </div>
-            <div style={{ padding: 16 }}>
-              {loadingChart && !volume ? (
-                <p style={{ color: 'var(--text-dim)' }}>加载中…</p>
-              ) : volume?.labels?.length && volume?.total?.length ? (
-                <LineChart
-                  labels={volume.labels}
-                  series={[
-                    { label: '总成交额', values: volume.total, color: 'var(--accent)' },
-                    { label: '上交所', values: volume.sh, color: 'var(--up-color)' },
-                    { label: '深交所', values: volume.sz, color: 'var(--down-color)' },
-                  ]}
-                  yAxisLabel="亿"
-                  valueFormat={(v) => v.toFixed(0)}
-                />
-              ) : (
-                <p style={{ color: 'var(--text-dim)' }}>暂无成交量数据（非交易时段或数据源暂时不可用），请稍后重试</p>
               )}
             </div>
           </div>
