@@ -152,7 +152,7 @@ function MarketIndices() {
                   valueFormat={(v) => v.toFixed(2)}
                 />
               ) : (
-                <p style={{ color: 'var(--text-dim)' }}>暂无分时数据，请稍后重试</p>
+                <p style={{ color: 'var(--text-dim)' }}>暂无分时数据（非交易时段或数据源暂时不可用），请稍后重试</p>
               )}
             </div>
           </div>
@@ -177,7 +177,7 @@ function MarketIndices() {
                   valueFormat={(v) => v.toFixed(0)}
                 />
               ) : (
-                <p style={{ color: 'var(--text-dim)' }}>暂无成交量数据，请稍后重试</p>
+                <p style={{ color: 'var(--text-dim)' }}>暂无成交量数据（非交易时段或数据源暂时不可用），请稍后重试</p>
               )}
             </div>
           </div>

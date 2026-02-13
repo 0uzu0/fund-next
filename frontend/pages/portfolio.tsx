@@ -3,80 +3,34 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import { useChartData } from '../hooks/useChartData';
-import { apiGet, apiPost, apiPut, apiDelete, clearCache } from '../utils/apiClient';
+import { apiGet, apiPost, apiPut, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
+import type { FundRow, Summary, Group, DataSourceOption } from '../types/portfolio';
+import { toNum, formatMoney, formatPct, formatYuan } from '../lib/format';
+import { SECTOR_CATEGORIES } from '../constants/portfolio';
+import {
+  parseNetValue,
+  addDaysToDate,
+  getTodayStr,
+  parseCodeFromInput,
+  PENDING_ADD_KEY,
+  PENDING_REDUCE_KEY,
+  loadPendingAdds,
+  loadPendingReduces,
+  type PendingItem,
+} from '../lib/portfolioHelpers';
+import PortfolioHeader from '../components/portfolio/PortfolioHeader';
+import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
+import HoldingTable from '../components/portfolio/HoldingTable';
+import WatchlistSection from '../components/portfolio/WatchlistSection';
+import FundDetailModal from '../components/portfolio/FundDetailModal';
+import EditHoldingModal from '../components/portfolio/EditHoldingModal';
 
-// 动态导入大型图表组件，优化首屏加载
-// 使用更激进的延迟加载策略，确保不阻塞页面
 const FundChart = dynamic(() => import('../components/FundChart'), {
-  loading: () => null, // 不显示加载提示，避免阻塞页面
-  ssr: false, // 图表组件不需要 SSR
+  loading: () => null,
+  ssr: false,
 });
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
-
-type FundRow = {
-  code: string;
-  name: string;
-  holding: number;
-  estAmount: number;
-  estPct: number;
-  actualAmount: number;
-  actualPct: number;
-  cumulative: number;
-  netValue?: string;
-  nowTime?: string;
-  dayOfGrowth?: string;
-  consecutiveInfo?: string;
-  monthlyInfo?: string;
-  holding_units?: number;
-  cost_per_unit?: number;
-};
-
-type Summary = {
-  totalHolding: number;
-  todayEstChange: number;
-  todayEstPct: number;
-  todayActualText: string;
-  todayActual: number;
-  cumulative: number;
-};
-
-type Group = { id: number; name: string; fund_codes: string[]; sort_order: number };
-
-function toNum(v: unknown): number {
-  if (v === null || v === undefined) return 0;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-function formatMoney(n: number): string {
-  const x = toNum(n);
-  const s = x >= 0 ? `+¥${x.toFixed(2)}` : `-¥${Math.abs(x).toFixed(2)}`;
-  return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-function formatPct(n: number): string {
-  const x = toNum(n);
-  const s = x >= 0 ? `+${x.toFixed(2)}%` : `${x.toFixed(2)}%`;
-  return s;
-}
-function formatYuan(n: number): string {
-  const x = toNum(n);
-  return '¥' + x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-const SECTOR_CATEGORIES: Record<string, string[]> = {
-  '科技': ['人工智能', '半导体', '云计算', '5G', '光模块', 'CPO', '通信设备', 'PCB', '消费电子', '计算机', '软件开发', '信创', '网络安全', 'IT服务', '国产软件', '光通信', '算力', '通信', '电子', '光学光电子', '元件', '存储芯片', '第三代半导体', '光刻胶', '电子化学品', 'LED', 'TMT', '科技'],
-  '医药健康': ['医药生物', '医疗器械', '生物疫苗', 'CRO', '创新药', '精准医疗', '医疗服务', '中药', '化学制药', '生物制品', '基因测序'],
-  '消费': ['食品饮料', '白酒', '家用电器', '纺织服饰', '商贸零售', '新零售', '家居用品', '婴童', '养老产业', '可选消费', '消费', '智能家居'],
-  '金融': ['银行', '证券', '保险', '非银金融', '国有大型银行', '股份制银行', '城商行', '金融'],
-  '能源': ['新能源', '煤炭', '石油石化', '电力', '绿色电力', '氢能源', '储能', '锂电池', '电池', '光伏设备', '风电设备', '充电桩', '固态电池', '能源', '公用事业', '锂矿'],
-  '工业制造': ['机械设备', '汽车', '新能源车', '工程机械', '高端装备', '电力设备', '专用设备', '通用设备', '自动化设备', '机器人', '人形机器人', '汽车零部件', '电网设备', '电机', '高端制造', '工业4.0', '低空经济'],
-  '材料': ['有色金属', '黄金股', '贵金属', '基础化工', '钢铁', '建筑材料', '稀土永磁', '小金属', '工业金属', '材料', '大宗商品', '资源'],
-  '军工': ['国防军工', '航天装备', '航空装备', '航海装备', '军工电子', '军民融合', '商业航天', '卫星互联网', '航母', '航空机场'],
-  '基建地产': ['建筑装饰', '房地产', '房地产开发', '房地产服务', '交通运输', '物流'],
-  '环保': ['环保', '环保设备', '环境治理', '垃圾分类', '碳中和', '液冷'],
-  '传媒': ['传媒', '游戏', '影视', '元宇宙', '超清视频', '数字孪生'],
-  '主题': ['国企改革', '一带一路', '中特估', '中字头', '并购重组', '华为', '新兴产业', '国家安防', '农牧主题', '农林牧渔', '养殖业', '猪肉'],
-};
+const API = API_BASE;
 
 export default function Portfolio() {
   const router = useRouter();
@@ -101,7 +55,9 @@ export default function Portfolio() {
   const [chartTooltipPos, setChartTooltipPos] = useState<{ left: number; top: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+  // 行情数据源（fund123 / 天天基金），需在 useChartData 之前声明
+  const [dataSource, setDataSource] = useState<DataSourceOption>('fund123');
+
   // 使用图表数据 Hook
   const {
     chartFund,
@@ -111,7 +67,7 @@ export default function Portfolio() {
     preloadedChartData,
     preloadChartData,
     fetchChartData,
-  } = useChartData(auth);
+  } = useChartData(auth, dataSource);
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
   const [watchlistRows, setWatchlistRows] = useState<FundRow[]>([]);
@@ -130,6 +86,9 @@ export default function Portfolio() {
   const [editHoldingLoading, setEditHoldingLoading] = useState(false);
   const [editHoldingError, setEditHoldingError] = useState('');
   const [detailRow, setDetailRow] = useState<FundRow | null>(null);
+  const [detailHoldings, setDetailHoldings] = useState<{ code: string; name: string; weight: string; change: number | null }[]>([]);
+  const [detailHoldingsLoading, setDetailHoldingsLoading] = useState(false);
+  const [detailHoldingsCollapsed, setDetailHoldingsCollapsed] = useState(false);
   const [showShowoffModal, setShowShowoffModal] = useState(false);
   const [hideSensitiveValues, setHideSensitiveValues] = useState(false);
   // 加仓弹窗（参照 openAddPositionModal）
@@ -164,10 +123,25 @@ export default function Portfolio() {
   const [deleteFundList, setDeleteFundList] = useState<{ code: string; name: string }[]>([]);
   const [deleteSelectedCodes, setDeleteSelectedCodes] = useState<string[]>([]);
   const [deleteSubmitLoading, setDeleteSubmitLoading] = useState(false);
+  // 持有基金表排序：列索引 2~7（持仓金额到累计收益）
+  const [holdingSort, setHoldingSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
+  // 自选基金表排序：列索引 2~6（净值到近30天）
+  const [watchlistSort, setWatchlistSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
+  // 持有基金分页：每页条数、当前页
+  const [holdingPageSize, setHoldingPageSize] = useState<10 | 20 | 30>(10);
+  const [holdingPage, setHoldingPage] = useState(1);
+  // 自选基金分页：每页条数、当前页
+  const [watchlistPageSize, setWatchlistPageSize] = useState<10 | 20 | 30>(10);
+  const [watchlistPage, setWatchlistPage] = useState(1);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setHideSensitiveValues(localStorage.getItem('hideSensitiveValues') === 'true');
+  }, []);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const s = localStorage.getItem('portfolio_data_source');
+    if (s === 'tiantian' || s === 'fund123') setDataSource(s);
   }, []);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -187,15 +161,12 @@ export default function Portfolio() {
       });
   }, []);
 
-  const fetchData = useCallback(() => {
-    // 立即设置 loading 为 false，让页面可以立即交互
-    // 数据会在后台加载，完成后更新状态，但不阻塞用户操作
+  const fetchData = useCallback((overrideSource?: 'fund123' | 'tiantian') => {
     setLoading(false);
-    setRefreshing(false);
-    
-    // 使用 API 客户端，带缓存
+    const source = overrideSource ?? dataSource;
+
     Promise.all([
-      apiGet(`${API}/api/portfolio/table?group=&holdOnly=1`, {
+      apiGet(`${API}/api/portfolio/table?group=&holdOnly=1&source=${source}`, {
         cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
       }),
       apiGet(`${API}/api/fund/data`, {
@@ -250,12 +221,13 @@ export default function Portfolio() {
         setGroups(list);
         setSelectedGroupId((prev) => (prev === null && list.length ? list[0].id : prev));
       }
+      setRefreshing(false);
     }).catch(() => {
-      setFundRows([]);
       setLoading(false);
       setRefreshing(false);
+      // 失败时保留原数据，便于用户重试，不闪白
     });
-  }, [chartFund, preloadChartData]);
+  }, [chartFund, preloadChartData, dataSource]);
 
   // 估值曲线容器宽高（用于 SVG viewBox，曲线随屏幕适配）
   useEffect(() => {
@@ -311,21 +283,42 @@ export default function Portfolio() {
     if (auth && !loading) fetchData();
   }, [auth, refreshing]);
 
-  const fetchWatchlist = useCallback(() => {
+  const fetchWatchlist = useCallback((overrideSource?: 'fund123' | 'tiantian') => {
     if (selectedGroupId == null) return;
-    const opts = { credentials: 'include' as RequestCredentials };
-    fetch(`${API}/api/portfolio/table?group=${selectedGroupId}`, opts)
-      .then((r) => r.json())
+    const source = overrideSource ?? dataSource;
+    const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}`;
+    apiGet<{ success: boolean; rows?: unknown[] }>(url, {
+      cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` },
+    })
       .then((res) => {
         if (res.success && res.rows) setWatchlistRows(res.rows);
         else setWatchlistRows([]);
       })
       .catch(() => setWatchlistRows([]));
-  }, [selectedGroupId]);
+  }, [selectedGroupId, dataSource]);
 
   useEffect(() => {
     if (auth && selectedGroupId != null) fetchWatchlist();
   }, [auth, selectedGroupId, fetchWatchlist, refreshing]);
+
+  useEffect(() => {
+    if (!detailRow?.code) {
+      setDetailHoldings([]);
+      return;
+    }
+    setDetailHoldingsLoading(true);
+    setDetailHoldings([]);
+    setDetailHoldingsCollapsed(false);
+    apiGet<{ success: boolean; holdings?: { code: string; name: string; weight: string; change: number | null }[] }>(
+      `${API}/api/fund/holdings?code=${encodeURIComponent(detailRow.code)}`,
+      { cache: { ttl: 5 * 60 * 1000 } }
+    )
+      .then((res) => {
+        if (res.success && Array.isArray(res.holdings)) setDetailHoldings(res.holdings);
+      })
+      .catch(() => setDetailHoldings([]))
+      .finally(() => setDetailHoldingsLoading(false));
+  }, [detailRow?.code]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -350,6 +343,7 @@ export default function Portfolio() {
       const d = await r.json();
       alert(d.message || (d.success ? '导入成功' : '导入失败'));
       if (d.success) {
+        clearCache();
         fetchData();
         if (selectedGroupId != null) fetchWatchlist();
       }
@@ -363,8 +357,9 @@ export default function Portfolio() {
     setSectorSelectedTags([]);
     setShowSectorTagModal(false);
     try {
-      const r = await fetch(`${API}/api/fund/data`, { credentials: 'include' });
-      const fundMap = (await r.json()) as Record<string, { fund_name?: string; sectors?: string[] }>;
+      const fundMap = await apiGet<Record<string, { fund_name?: string; sectors?: string[] }>>(`${API}/api/fund/data`, {
+        cache: { ttl: 2 * 60 * 1000 },
+      });
       const list = Object.entries(fundMap).map(([code, data]) => ({
         code,
         name: data.fund_name || `基金${code}`,
@@ -380,8 +375,9 @@ export default function Portfolio() {
   const openDeleteFundModal = async () => {
     setDeleteSelectedCodes([]);
     try {
-      const r = await fetch(`${API}/api/fund/data`, { credentials: 'include' });
-      const fundMap = (await r.json()) as Record<string, { fund_name?: string }>;
+      const fundMap = await apiGet<Record<string, { fund_name?: string }>>(`${API}/api/fund/data`, {
+        cache: { ttl: 2 * 60 * 1000 },
+      });
       const list = Object.entries(fundMap).map(([code, data]) => ({
         code,
         name: data.fund_name || `基金${code}`,
@@ -412,6 +408,7 @@ export default function Portfolio() {
         if (d.success) {
           setShowDeleteFundModal(false);
           setDeleteSelectedCodes([]);
+          clearCache('portfolio/table');
           fetchData();
           fetchWatchlist();
         }
@@ -481,14 +478,6 @@ export default function Portfolio() {
       ).slice(0, 8)
     : [];
 
-  const parseCodeFromInput = (val: string): string => {
-    const t = val.trim();
-    if (/^\d{6}$/.test(t)) return t;
-    const m = t.match(/^(\d{6})\s*[-–—]\s*/);
-    if (m) return m[1];
-    return t;
-  };
-
   const onRemoveFromGroup = async (code: string) => {
     if (selectedGroupId == null) return;
     if (!confirm('确定从该分组中移除该基金吗？')) return;
@@ -499,6 +488,7 @@ export default function Portfolio() {
       });
       const d = await r.json();
       if (d.success) {
+        clearCache('portfolio/table');
         fetchData();
         fetchWatchlist();
       } else {
@@ -532,6 +522,7 @@ export default function Portfolio() {
       if (d.success) {
         setAddInput('');
         setShowSuggestions(false);
+        clearCache('portfolio/table');
         fetchData();
         fetchWatchlist();
       } else {
@@ -633,49 +624,8 @@ export default function Portfolio() {
     }
   }
 
-  function parseNetValue(s: string | undefined): number {
-    if (s == null || s === '' || s === '—') return 0;
-    const parts = String(s).split('(');
-    const n = parseFloat(parts[0]);
-    return Number.isFinite(n) ? n : 0;
-  }
-  function addDaysToDate(ymd: string, days: number): string {
-    const d = new Date(ymd + 'T12:00:00');
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
-  const PENDING_ADD_KEY = 'lan_fund_pending_adds';
-  const PENDING_REDUCE_KEY = 'lan_fund_pending_reduces';
-  function getTodayStr(): string {
-    return new Date().toISOString().slice(0, 10);
-  }
-  function loadPendingAdds(): { fundCode: string; amount: number; settlementDate: string }[] {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(PENDING_ADD_KEY) : null;
-      const list: { fundCode: string; amount: number; settlementDate: string }[] = raw ? JSON.parse(raw) : [];
-      const today = getTodayStr();
-      const still = list.filter((p) => (p.settlementDate || '') > today);
-      if (still.length !== list.length && typeof window !== 'undefined') localStorage.setItem(PENDING_ADD_KEY, JSON.stringify(still));
-      return still;
-    } catch {
-      return [];
-    }
-  }
-  function loadPendingReduces(): { fundCode: string; amount: number; settlementDate: string }[] {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(PENDING_REDUCE_KEY) : null;
-      const list: { fundCode: string; amount: number; settlementDate: string }[] = raw ? JSON.parse(raw) : [];
-      const today = getTodayStr();
-      const still = list.filter((p) => (p.settlementDate || '') > today);
-      if (still.length !== list.length && typeof window !== 'undefined') localStorage.setItem(PENDING_REDUCE_KEY, JSON.stringify(still));
-      return still;
-    } catch {
-      return [];
-    }
-  }
-
-  const [pendingAdds, setPendingAdds] = useState<{ fundCode: string; amount: number; settlementDate: string }[]>([]);
-  const [pendingReduces, setPendingReduces] = useState<{ fundCode: string; amount: number; settlementDate: string }[]>([]);
+  const [pendingAdds, setPendingAdds] = useState<PendingItem[]>([]);
+  const [pendingReduces, setPendingReduces] = useState<PendingItem[]>([]);
   useEffect(() => {
     setPendingAdds(loadPendingAdds());
     setPendingReduces(loadPendingReduces());
@@ -747,14 +697,14 @@ export default function Portfolio() {
     const buyDate = addPositionTime.date;
     const isAfter15 = addPositionTime.period === 'after15';
     
-    // 根据交易规则获取净值
+    // 根据交易规则获取净值（历史净值不变，可缓存）
     let netValue = parseNetValue(addPositionRow.netValue) || 1;
     try {
-      const netValueRes = await fetch(`${API}/api/fund/net-value?code=${encodeURIComponent(addPositionRow.code)}&trade_date=${buyDate}&period=${isAfter15 ? 'after15' : 'before15'}`, {
-        credentials: 'include',
-      });
-      const netValueData = await netValueRes.json();
-      if (netValueData.success && netValueData.netValue > 0) {
+      const netValueData = await apiGet<{ success: boolean; netValue?: number }>(
+        `${API}/api/fund/net-value?code=${encodeURIComponent(addPositionRow.code)}&trade_date=${buyDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
+        { cache: { ttl: 24 * 60 * 60 * 1000, key: `net-value:${addPositionRow.code}:${buyDate}:${isAfter15 ? 'after15' : 'before15'}` } }
+      );
+      if (netValueData.success && netValueData.netValue != null && netValueData.netValue > 0) {
         netValue = netValueData.netValue;
       }
     } catch (e) {
@@ -833,14 +783,14 @@ export default function Portfolio() {
     const sellDate = reducePositionTime.date;
     const isAfter15 = reducePositionTime.period === 'after15';
     
-    // 根据交易规则获取净值
+    // 根据交易规则获取净值（历史净值不变，可缓存）
     let netValue = parseNetValue(reducePositionRow.netValue) || 1;
     try {
-      const netValueRes = await fetch(`${API}/api/fund/net-value?code=${encodeURIComponent(reducePositionRow.code)}&trade_date=${sellDate}&period=${isAfter15 ? 'after15' : 'before15'}`, {
-        credentials: 'include',
-      });
-      const netValueData = await netValueRes.json();
-      if (netValueData.success && netValueData.netValue > 0) {
+      const netValueData = await apiGet<{ success: boolean; netValue?: number }>(
+        `${API}/api/fund/net-value?code=${encodeURIComponent(reducePositionRow.code)}&trade_date=${sellDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
+        { cache: { ttl: 24 * 60 * 60 * 1000, key: `net-value:${reducePositionRow.code}:${sellDate}:${isAfter15 ? 'after15' : 'before15'}` } }
+      );
+      if (netValueData.success && netValueData.netValue != null && netValueData.netValue > 0) {
         netValue = netValueData.netValue;
       }
     } catch (e) {
@@ -920,6 +870,84 @@ export default function Portfolio() {
     });
   }, [fundRows, pendingAdds, pendingReduces]);
 
+  // 持有基金表排序列取值（列索引 2~7）
+  const getHoldingSortValue = useCallback((row: FundRow & { displayHolding: number }, col: number): number => {
+    switch (col) {
+      case 2: return row.displayHolding;
+      case 3: return toNum(row.estAmount);
+      case 4: return toNum(row.estPct);
+      case 5: return toNum(row.actualAmount);
+      case 6: return toNum(row.actualPct);
+      case 7: return toNum(row.cumulative);
+      default: return 0;
+    }
+  }, []);
+
+  const sortedHoldingRows = useMemo(() => {
+    if (!holdingSort) return displayFundRows;
+    const { col, dir } = holdingSort;
+    const arr = [...displayFundRows];
+    arr.sort((a, b) => {
+      const va = getHoldingSortValue(a, col);
+      const vb = getHoldingSortValue(b, col);
+      const cmp = va - vb;
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [displayFundRows, holdingSort, getHoldingSortValue]);
+
+  // 自选基金表排序列取值（列索引 2~6）：优先按数值，否则按字符串
+  const getWatchlistSortValue = useCallback((row: FundRow, col: number): number | string => {
+    switch (col) {
+      case 2: return toNum(row.netValue);
+      case 3: return toNum(row.estPct);
+      case 4: {
+        const s = String(row.dayOfGrowth ?? '');
+        const m = s.match(/-?[\d.]+/);
+        return m ? parseFloat(m[0]) : s;
+      }
+      case 5: return String(row.consecutiveInfo ?? '');
+      case 6: return String(row.monthlyInfo ?? '');
+      default: return 0;
+    }
+  }, []);
+
+  const sortedWatchlistRows = useMemo(() => {
+    if (!watchlistSort) return watchlistRows;
+    const { col, dir } = watchlistSort;
+    const arr = [...watchlistRows];
+    arr.sort((a, b) => {
+      const va = getWatchlistSortValue(a, col);
+      const vb = getWatchlistSortValue(b, col);
+      let cmp = 0;
+      if (typeof va === 'number' && typeof vb === 'number') cmp = va - vb;
+      else cmp = String(va).localeCompare(String(vb), undefined, { numeric: true });
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    return arr;
+  }, [watchlistRows, watchlistSort, getWatchlistSortValue]);
+
+  const holdingTotalPages = Math.max(1, Math.ceil(sortedHoldingRows.length / holdingPageSize));
+  const holdingPageSafe = Math.min(Math.max(1, holdingPage), holdingTotalPages);
+  const holdingRowsForPage = useMemo(
+    () => sortedHoldingRows.slice((holdingPageSafe - 1) * holdingPageSize, holdingPageSafe * holdingPageSize),
+    [sortedHoldingRows, holdingPageSize, holdingPageSafe]
+  );
+
+  const watchlistTotalPages = Math.max(1, Math.ceil(sortedWatchlistRows.length / watchlistPageSize));
+  const watchlistPageSafe = Math.min(Math.max(1, watchlistPage), watchlistTotalPages);
+  const watchlistRowsForPage = useMemo(
+    () => sortedWatchlistRows.slice((watchlistPageSafe - 1) * watchlistPageSize, watchlistPageSafe * watchlistPageSize),
+    [sortedWatchlistRows, watchlistPageSize, watchlistPageSafe]
+  );
+
+  useEffect(() => {
+    if (holdingPage > holdingTotalPages) setHoldingPage(Math.max(1, holdingTotalPages));
+  }, [holdingTotalPages, holdingPage]);
+  useEffect(() => {
+    if (watchlistPage > watchlistTotalPages) setWatchlistPage(Math.max(1, watchlistTotalPages));
+  }, [watchlistTotalPages, watchlistPage]);
+
   const displayTotalHolding = useMemo(() => displayFundRows.reduce((s, r) => s + r.displayHolding, 0), [displayFundRows]);
   const displayTodayEstPct = displayTotalHolding > 0 ? (summary.todayEstChange / displayTotalHolding) * 100 : summary.todayEstPct;
   const displayCumulative = summary.cumulative - cumulativeCorrection;
@@ -956,14 +984,19 @@ export default function Portfolio() {
         <title>持仓基金 - LanFund</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-          <div className="portfolio-header">
-            <h1>
-              💼 持仓基金
-              <button type="button" className="refresh-button" onClick={onRefresh} disabled={refreshing}>
-                🔄 刷新
-              </button>
-            </h1>
-          </div>
+          <PortfolioHeader
+            dataSource={dataSource}
+            onDataSourceChange={(v) => {
+              setDataSource(v);
+              if (typeof window !== 'undefined') localStorage.setItem('portfolio_data_source', v);
+              clearCache('portfolio/table');
+              clearCache('chart-data');
+              fetchData(v);
+              if (selectedGroupId != null) fetchWatchlist(v);
+            }}
+            onRefresh={onRefresh}
+            refreshing={refreshing}
+          />
 
           {/* 免责声明 - 一比一样式 */}
           <div style={{
@@ -1562,341 +1595,96 @@ export default function Portfolio() {
             <span className="file-operations-tip">▲ 导入/导出为覆盖性操作,直接应用最新配置(非累加)</span>
           </div>
 
-          {/* 持仓统计 */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ color: '#facc15' }}>●</span> 持仓统计
-              </h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{
-                    borderRadius: 20,
-                    padding: '6px 16px',
-                  }}
-                  onClick={() => setShowShowoffModal(true)}
-                >
-                  ✨ 一键炫耀
-                </button>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  title="显示 / 隐藏 收益明细"
-                  style={{ cursor: 'pointer', fontSize: 'var(--font-size-xs)', userSelect: 'none' }}
-                  onClick={() => {
-                    const next = !hideSensitiveValues;
-                    if (typeof window !== 'undefined') localStorage.setItem('hideSensitiveValues', String(next));
-                    setHideSensitiveValues(next);
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const next = !hideSensitiveValues; if (typeof window !== 'undefined') localStorage.setItem('hideSensitiveValues', String(next)); setHideSensitiveValues(next); } }}
-                >
-                  {hideSensitiveValues ? '😑' : '😀'}
-                </span>
-              </div>
-            </div>
-            <div className="summary-bar">
-              <div className="summary-card">
-                <div className="summary-label">总持仓金额</div>
-                <div className="summary-value">{hideSensitiveValues ? '****' : formatYuan(displayTotalHolding)}</div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">今日预估涨跌</div>
-                <div className={`summary-value ${summary.todayEstChange >= 0 ? 'positive' : 'negative'}`}>
-                  {hideSensitiveValues ? '****' : `${formatMoney(summary.todayEstChange)} (${formatPct(displayTodayEstPct)})`}
-                </div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">今日实际涨跌(已结算部分)</div>
-                <div className={`summary-value ${summary.todayActual >= 0 ? 'positive' : 'negative'}`}>
-                  {hideSensitiveValues ? '****' : summary.todayActualText}
-                </div>
-              </div>
-              <div className="summary-card">
-                <div className="summary-label">累计收益</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span className={`summary-value ${displayCumulative >= 0 ? 'positive' : 'negative'}`}>
-                    {hideSensitiveValues ? '****' : formatMoney(displayCumulative)}
-                  </span>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: 'var(--font-size-xs)' }} onClick={openCumulativeCorrectionModal}>修正</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <section className="portfolio-block" aria-label="持仓统计">
+            <PortfolioSummaryBar
+              summary={summary}
+              hideSensitiveValues={hideSensitiveValues}
+              displayTotalHolding={displayTotalHolding}
+              displayTodayEstPct={displayTodayEstPct}
+              displayCumulative={displayCumulative}
+              onShowShowoff={() => setShowShowoffModal(true)}
+              onToggleSensitive={() => {
+                const next = !hideSensitiveValues;
+                if (typeof window !== 'undefined') localStorage.setItem('hideSensitiveValues', String(next));
+                setHideSensitiveValues(next);
+              }}
+              onCumulativeCorrection={openCumulativeCorrectionModal}
+            />
+          </section>
 
-          {/* 持有基金表格 */}
-          <div>
-            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: 'var(--accent)' }}>■</span> 持有基金
-            </h3>
-            <div className="table-container">
-              <table className="style-table">
-                <thead>
-                  <tr>
-                    <th>基金代码</th>
-                    <th>基金名称</th>
-                    <th>持仓金额</th>
-                    <th>预估收益</th>
-                    <th>预估涨跌</th>
-                    <th>实际收益</th>
-                    <th>实际涨跌</th>
-                    <th>累计收益</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fundRows.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: 24, color: 'var(--text-dim)' }}>暂无持仓数据</td></tr>
-                  )}
-                  {displayFundRows.map((r) => (
-                    <tr key={r.code}>
-                      <td style={{ color: 'var(--accent)' }}>{String(r.code ?? '')}</td>
-                      <td style={{ textAlign: 'left' }}>{String(r.name ?? '')}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{hideSensitiveValues ? '****' : formatYuan(r.displayHolding)}</td>
-                      <td className={toNum(r.estAmount) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.estAmount)}</td>
-                      <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatPct(r.estPct)}</td>
-                      <td className={toNum(r.actualAmount) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.actualAmount)}</td>
-                      <td className={toNum(r.actualPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (toNum(r.actualPct) !== 0 ? formatPct(r.actualPct) : '—')}</td>
-                      <td className={toNum(r.cumulative) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.cumulative)}</td>
-                      <td>
-                        <button type="button" className="btn btn-primary" style={{ padding: '6px 12px', marginRight: 8 }} onClick={() => openAddPositionModal(r)}>加仓</button>
-                        <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => openReducePositionModal(r)}>减仓</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            </div>
+          <section className="portfolio-block" aria-label="持有基金">
+            <HoldingTable
+            rows={holdingRowsForPage}
+            totalCount={sortedHoldingRows.length}
+            isEmpty={fundRows.length === 0}
+            sort={holdingSort}
+            onSortChange={(col, dir) => { if (dir === null) setHoldingSort(null); else setHoldingSort({ col, dir }); }}
+            pageSize={holdingPageSize}
+            page={holdingPageSafe}
+            totalPages={holdingTotalPages}
+            onPageSizeChange={(v) => { setHoldingPageSize(v); setHoldingPage(1); }}
+            onPageChange={setHoldingPage}
+            hideSensitiveValues={hideSensitiveValues}
+            onRowDetail={setDetailRow}
+            onAddPosition={openAddPositionModal}
+            onReducePosition={openReducePositionModal}
+          />
+          </section>
 
-          {/* 自选基金区块 - 分组切换 + 联想添加 */}
-          <div style={{ marginTop: 32 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 'var(--font-size-md)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ color: 'var(--accent)' }}>◆</span> 自选基金
-            </h3>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              {groups.map((g) => {
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    className={selectedGroupId === g.id ? 'btn btn-primary' : 'btn btn-secondary'}
-                    style={
-                      selectedGroupId === g.id
-                        ? { padding: '6px 12px', background: 'var(--gh-bg-tertiary)', color: 'var(--accent)', borderColor: 'var(--accent)' }
-                        : { padding: '6px 12px' }
-                    }
-                    onClick={() => setSelectedGroupId(g.id)}
-                  >
-                    {g.name}
-                  </button>
-                );
-              })}
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '6px 12px', borderStyle: 'dashed' }}
-                onClick={() => setShowNewGroupModal(true)}
-              >
-                + 新建分组
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ padding: '6px 12px', borderStyle: 'dashed' }}
-                onClick={() => setShowDeleteGroupModal(true)}
-              >
-                🗑️ 删除分组
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'flex-start', position: 'relative' }}>
-              <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
-                <input
-                  type="text"
-                  value={addInput}
-                  onChange={(e) => { setAddInput(e.target.value); setShowSuggestions(true); setAddError(''); }}
-                  onFocus={() => addInput.trim() && setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  placeholder="输入基金代码或名称 (支持联想)"
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    background: 'var(--gh-bg-primary)',
-                    color: 'var(--text-main)',
-                    fontSize: 'var(--font-size-xs)',
-                  }}
-                />
-                {showSuggestions && addSuggestions.length > 0 && (
-                  <ul
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      margin: 0,
-                      padding: 0,
-                      listStyle: 'none',
-                      background: 'var(--card-bg)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      marginTop: 4,
-                      maxHeight: 240,
-                      overflowY: 'auto',
-                      zIndex: 10,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                    }}
-                  >
-                    {addSuggestions.map((f) => (
-                      <li
-                        key={f.code}
-                        style={{
-                          padding: '10px 14px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid var(--gh-border-secondary)',
-                          color: 'var(--text-main)',
-                          fontSize: 'var(--font-size-xs)',
-                        }}
-                        onMouseDown={(e) => { e.preventDefault(); setAddInput(`${f.code} - ${f.name}`); setShowSuggestions(false); }}
-                      >
-                        <span style={{ color: 'var(--accent)' }}>{f.code}</span> {f.name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <button
-                type="button"
-                className="btn"
-                style={{ background: '#7c3aed', color: '#fff' }}
-                onClick={onAddFund}
-                disabled={addLoading || selectedGroupId == null}
-              >
-                {addLoading ? '添加中…' : '添加'}
-              </button>
-              {addError && <span style={{ color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-xs)' }}>{addError}</span>}
-            </div>
-            <div className="table-container">
-              <table className="style-table">
-                <thead>
-                  <tr>
-                    <th>基金代码</th>
-                    <th>基金名称</th>
-                    <th>净值</th>
-                    <th className="sortable">今日涨幅</th>
-                    <th className="sortable">昨日涨幅</th>
-                    <th className="sortable">连涨/跌</th>
-                    <th className="sortable">近30天</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {watchlistRows.slice(0, 10).map((r) => (
-                    <tr key={r.code}>
-                      <td style={{ color: 'var(--accent)' }}>{String(r.code ?? '')}</td>
-                      <td
-                        style={{ textAlign: 'left', cursor: 'pointer', color: 'var(--accent)' }}
-                        onClick={() => setDetailRow(r)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailRow(r); } }}
-                        role="button"
-                        tabIndex={0}
-                        title="点击查看详情"
-                      >
-                        {String(r.name ?? '')}
-                      </td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--font-size-xs)' }}>{r.netValue != null && r.netValue !== '' ? String(r.netValue) : '—'}</td>
-                      <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{r.estPct != null && String(r.estPct) !== '' ? formatPct(r.estPct) : '—'}</td>
-                      <td className={String(r.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{r.dayOfGrowth != null && r.dayOfGrowth !== '' ? String(r.dayOfGrowth) : '—'}</td>
-                      <td style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)' }}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
-                      <td style={{ fontSize: 'var(--font-size-xs)', fontFamily: 'var(--font-mono)' }}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
-                      <td>
-                        {selectedGroupId !== null && (groups.find((g) => g.sort_order === 0)?.id ?? groups[0]?.id) === selectedGroupId ? (
-                          <button type="button" className="btn btn-success" style={{ padding: '6px 12px' }} onClick={() => openEditHolding(r)}>修改持仓</button>
-                        ) : (
-                          <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', color: 'var(--gh-danger-fg)' }} onClick={() => onRemoveFromGroup(r.code)}>删除</button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {watchlistRows.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: 24, color: 'var(--text-dim)' }}>暂无自选基金，输入代码或名称后点击添加</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ color: 'var(--text-dim)' }}>共{watchlistRows.length}条</span>
-              <button type="button" className="btn btn-secondary" disabled>上一页</button>
-              <span style={{ minWidth: 80, textAlign: 'center' }}>第1/1页</span>
-              <button type="button" className="btn btn-secondary" disabled>下一页</button>
-            </div>
-          </div>
+          <section className="portfolio-block" aria-label="自选基金">
+            <WatchlistSection
+            groups={groups}
+            selectedGroupId={selectedGroupId}
+            onSelectGroup={setSelectedGroupId}
+            rows={watchlistRowsForPage}
+            totalCount={sortedWatchlistRows.length}
+            isEmpty={watchlistRows.length === 0}
+            sort={watchlistSort}
+            onSortChange={(col, dir) => { if (dir === null) setWatchlistSort(null); else setWatchlistSort({ col, dir }); }}
+            pageSize={watchlistPageSize}
+            page={watchlistPageSafe}
+            totalPages={watchlistTotalPages}
+            onPageSizeChange={(v) => { setWatchlistPageSize(v); setWatchlistPage(1); }}
+            onPageChange={setWatchlistPage}
+            addInput={addInput}
+            onAddInputChange={(v) => { setAddInput(v); setShowSuggestions(true); setAddError(''); }}
+            addSuggestions={addSuggestions}
+            showSuggestions={showSuggestions}
+            onShowSuggestions={setShowSuggestions}
+            onSelectSuggestion={(code, name) => { setAddInput(`${code} - ${name}`); setShowSuggestions(false); }}
+            addLoading={addLoading}
+            addError={addError}
+            onAddFund={onAddFund}
+            onNewGroup={() => setShowNewGroupModal(true)}
+            onDeleteGroup={() => setShowDeleteGroupModal(true)}
+            defaultGroupId={groups.find((g) => g.sort_order === 0)?.id ?? groups[0]?.id ?? null}
+            onRowDetail={setDetailRow}
+            onEditHolding={openEditHolding}
+            onRemoveFromGroup={onRemoveFromGroup}
+          />
+          </section>
 
-          {/* 基金详情弹窗（点击自选基金名称打开） */}
-          {detailRow && (
-            <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => setDetailRow(null)}>
-              <div className="sector-modal-content" style={{ maxWidth: 480, width: '95%' }} onClick={(e) => e.stopPropagation()}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-                  <div>
-                    <div style={{ fontSize: 'var(--font-size-xs)', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>{detailRow.name || '—'}</div>
-                    <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', marginTop: 4 }}>{detailRow.code}</div>
-                  </div>
-                  <button type="button" title="关闭" style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 4, fontSize: 'var(--font-size-xs)' }} onClick={() => setDetailRow(null)}>✕</button>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 24px', marginBottom: 20, fontSize: 'var(--font-size-xs)' }}>
-                  <div><span style={{ color: 'var(--text-dim)' }}>净值</span><div style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.netValue ?? '—'}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>今日涨幅</span><div className={toNum(detailRow.estPct) >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.estPct != null && String(detailRow.estPct) !== '' ? formatPct(detailRow.estPct) : '—'}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>昨日涨幅</span><div className={String(detailRow.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.dayOfGrowth ?? '—'}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>连涨/跌</span><div style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.consecutiveInfo ?? '—'}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>近30天</span><div style={{ fontWeight: 600, marginTop: 2 }}>{detailRow.monthlyInfo ?? '—'}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>持仓金额</span><div style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatYuan(detailRow.holding)}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>当日预估盈亏</span><div className={toNum(detailRow.estAmount) >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatMoney(detailRow.estAmount)}</div></div>
-                  <div><span style={{ color: 'var(--text-dim)' }}>累计收益</span><div className={toNum(detailRow.cumulative) >= 0 ? 'positive' : 'negative'} style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatMoney(detailRow.cumulative)}</div></div>
-                </div>
-              </div>
-            </div>
-          )}
+          <FundDetailModal
+            row={detailRow}
+            onClose={() => setDetailRow(null)}
+            holdings={detailHoldings}
+            holdingsLoading={detailHoldingsLoading}
+            collapsed={detailHoldingsCollapsed}
+            onToggleCollapsed={() => setDetailHoldingsCollapsed((c) => !c)}
+            hideSensitiveValues={hideSensitiveValues}
+          />
 
-          {/* 修改持仓弹窗 */}
-          {editHoldingRow && (
-            <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !editHoldingLoading && setEditHoldingRow(null)}>
-              <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-                <div className="sector-modal-header">修改持仓金额</div>
-                <div style={{ padding: '16px 0' }}>
-                  <p style={{ margin: '0 0 12px', color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>
-                    {editHoldingRow.code} - {editHoldingRow.name}
-                  </p>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>持有份额</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={editHoldingUnits}
-                    onChange={(e) => setEditHoldingUnits(e.target.value)}
-                    className="sector-modal-search"
-                    style={{ width: '100%', marginBottom: 12 }}
-                  />
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>成本单价（元）</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={editCostPerUnit}
-                    onChange={(e) => setEditCostPerUnit(e.target.value)}
-                    className="sector-modal-search"
-                    style={{ width: '100%' }}
-                  />
-                  {editHoldingError && <p style={{ margin: '12px 0 0', color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-xs)' }}>{editHoldingError}</p>}
-                </div>
-                <div className="sector-modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setEditHoldingRow(null)} disabled={editHoldingLoading}>取消</button>
-                  <button type="button" className="btn btn-primary" onClick={onSaveEditHolding} disabled={editHoldingLoading}>{editHoldingLoading ? '保存中…' : '保存'}</button>
-                </div>
-              </div>
-            </div>
-          )}
+          <EditHoldingModal
+            row={editHoldingRow}
+            onClose={() => setEditHoldingRow(null)}
+            units={editHoldingUnits}
+            costPerUnit={editCostPerUnit}
+            onUnitsChange={setEditHoldingUnits}
+            onCostPerUnitChange={setEditCostPerUnit}
+            error={editHoldingError}
+            loading={editHoldingLoading}
+            onSave={onSaveEditHolding}
+          />
 
           {/* 加仓弹窗（参照 openAddPositionModal） */}
           {addPositionRow && (
@@ -2494,6 +2282,7 @@ export default function Portfolio() {
                             const failCount = results.length - successCount;
                             if (successCount > 0) {
                               alert(`成功添加 ${successCount} 只基金到分组"${group.name}"${failCount > 0 ? `，${failCount} 只失败` : ''}`);
+                              clearCache('portfolio/table');
                               fetchData();
                               fetchWatchlist();
                             } else {

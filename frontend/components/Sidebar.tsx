@@ -23,6 +23,7 @@ function Sidebar() {
   const pathname = router.pathname;
   const [isAdmin, setIsAdmin] = useState(false);
   const hasFetched = useRef(false);
+  const activeIconRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     // 检查缓存
@@ -53,6 +54,14 @@ function Sidebar() {
     }, 0);
   }, []);
 
+  // 移动端：路由变化后把当前选中项滚动到可见区域
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isMobile = window.matchMedia('(max-width: 768px)').matches;
+    if (!isMobile || !activeIconRef.current) return;
+    activeIconRef.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [pathname]);
+
   // 使用 useMemo 优化 active 状态的计算
   const isActive = useMemo(() => {
     return (href: string) => pathname === href;
@@ -62,14 +71,20 @@ function Sidebar() {
     return pathname === '/admin/users' || pathname === '/admin/profile';
   }, [pathname]);
 
+  const setActiveRef = (el: HTMLAnchorElement | null, active: boolean) => {
+    if (active) activeIconRef.current = el;
+  };
+
   return (
-    <aside className="sidebar-nav">
+    <aside className="sidebar-nav" role="navigation" aria-label="主导航">
       {ITEMS.map((item) => (
         <Link
           key={item.href}
           href={item.href}
+          ref={(el) => setActiveRef(el, isActive(item.href))}
           className={`sidebar-icon ${isActive(item.href) ? 'active' : ''}`}
           title={item.label}
+          aria-current={isActive(item.href) ? 'page' : undefined}
         >
           <span className="icon">{item.icon}</span>
         </Link>
@@ -77,8 +92,10 @@ function Sidebar() {
       {isAdmin && (
         <Link
           href="/admin/users"
+          ref={(el) => setActiveRef(el, isAdminActive)}
           className={`sidebar-icon ${isAdminActive ? 'active' : ''}`}
           title="用户管理"
+          aria-current={isAdminActive ? 'page' : undefined}
         >
           <span className="icon">👤</span>
         </Link>

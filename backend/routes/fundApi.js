@@ -11,10 +11,12 @@ const db = require('../db');
 const bcrypt = require('bcryptjs');
 const { getCurrentUserId, getCurrentUsername, loginRequired, adminRequired } = require('../auth');
 const fundQuotes = require('../services/fundQuotes');
+const tiantianFund = require('../services/tiantianFund');
 const fund123 = require('../services/fund123');
 const sectorEastMoney = require('../services/sectorEastMoney');
 const preciousMetals = require('../services/preciousMetals');
 const marketIndices = require('../services/marketIndices');
+const fundHoldings = require('../services/fundHoldings');
 const cache = require('../cache');
 const axios = require('axios');
 
@@ -406,6 +408,7 @@ router.get('/api/fund/groups', loginRequired, (req, res) => {
       fund_codes: r.fund_codes ? JSON.parse(r.fund_codes) : [],
       sort_order: r.sort_order,
     }));
+    res.setHeader('Cache-Control', 'private, max-age=60'); // 1 分钟，变更分组后前端会 clearCache
     res.json({ success: true, groups });
   } catch (e) {
     res.status(500).json({ success: false, message: String(e) });
@@ -612,9 +615,12 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       return list;
     }
 
+    const source = String(req.query.source || 'fund123').toLowerCase();
+    const searchCodeFn = source === 'tiantian' ? tiantianFund.searchCodeTiantian : fundQuotes.searchCode;
+
     let rows = [];
     try {
-      const resultRows = await fundQuotes.searchCode(fundMapForSearch);
+      const resultRows = await searchCodeFn(fundMapForSearch);
       rows = fundQuotes.buildPositionRows(resultRows, fundMapForHolding);
       if (rows.length === 0 && Object.keys(fundMapForHolding).length > 0) {
         rows = buildFallbackRows();
@@ -646,7 +652,21 @@ router.get('/api/portfolio/fund-list', loginRequired, (req, res) => {
       if (codes.has(r.fund_code)) fundMap[r.fund_code] = r.fund_name || `基金${r.fund_code}`;
     }
     const funds = [...codes].sort().map(code => ({ code, name: fundMap[code] || `基金${code}` }));
+    res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({ success: true, funds });
+  } catch (e) {
+    res.status(500).json({ success: false, message: String(e) });
+  }
+});
+
+// ---------- 基金前10重仓（东方财富+腾讯行情，参考 hzm0321/real-time-fund）----------
+router.get('/api/fund/holdings', loginRequired, async (req, res) => {
+  try {
+    const code = String(req.query.code || '').trim();
+    if (!code) return res.status(400).json({ success: false, message: '请提供基金代码' });
+    const list = await fundHoldings.getFundHoldings(code);
+    res.setHeader('Cache-Control', 'private, max-age=120'); // 重仓变动不频繁，2 分钟
+    res.json({ success: true, holdings: list });
   } catch (e) {
     res.status(500).json({ success: false, message: String(e) });
   }
@@ -1183,6 +1203,7 @@ router.get('/api/fund/net-value', loginRequired, async (req, res) => {
       return res.status(404).json({ success: false, message: '无法获取该日期的净值，请稍后重试' });
     }
     
+    res.setHeader('Cache-Control', 'private, max-age=86400'); // 历史净值不变，缓存 24 小时
     res.json({
       success: true,
       netValue: netValue,

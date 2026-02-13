@@ -3,7 +3,8 @@
  * 提供请求缓存、去重、错误重试等功能
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
+/** 后端 API 根地址，供页面与 hooks 复用 */
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 // 请求缓存配置
 interface CacheConfig {
@@ -110,8 +111,8 @@ export async function apiRequest<T = any>(
   // 生成缓存键
   const cacheKey = cache?.key || getCacheKey(url, fetchOptions);
   
-  // 检查缓存
-  if (cache && fetchOptions.method === undefined || fetchOptions.method === 'GET') {
+  // 仅当显式传入 cache 且为 GET 时使用缓存
+  if (cache && (fetchOptions.method === undefined || fetchOptions.method === 'GET')) {
     const cachedData = getFromCache(cacheKey);
     if (cachedData !== null) {
       return cachedData;

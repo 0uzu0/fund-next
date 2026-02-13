@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
-import { apiGet } from '../utils/apiClient';
+import { apiGet, API_BASE } from '../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
+const API = API_BASE;
 
 export type ChartData = {
   labels: string[];
@@ -37,20 +37,20 @@ export interface UseChartDataReturn {
   refreshChartData: () => void;
 }
 
-export function useChartData(auth: { username: string } | null): UseChartDataReturn {
+export function useChartData(auth: { username: string } | null, dataSource?: string): UseChartDataReturn {
   // 当前选中的基金
   const [chartFund, setChartFund] = useState<{ code: string; name: string } | null>(null);
-  
+
   // 当前图表的数据
   const [chartData, setChartData] = useState<ChartData>({ labels: [], growth: [] });
   const [chartLoading, setChartLoading] = useState(false);
-  
+
   // 图表数据缓存（预加载的数据）
   const chartDataCache = useRef<Map<string, ChartData>>(new Map());
-  
+
   // 预加载的图表数据映射
   const [preloadedChartData, setPreloadedChartData] = useState<Record<string, ChartData>>({});
-  
+
   // 用于取消正在进行的图表请求
   const chartAbortControllerRef = useRef<AbortController | null>(null);
 
@@ -313,6 +313,23 @@ export function useChartData(auth: { username: string } | null): UseChartDataRet
     if (!chartFund?.code) return;
     fetchChartData(chartFund.code);
   }, [chartFund?.code, fetchChartData]);
+
+  // 切换数据源时：清空图表缓存并重新拉取当前基金图表
+  useEffect(() => {
+    if (dataSource === undefined) return;
+    chartDataCache.current.clear();
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(CHART_DATA_STORAGE_KEY);
+      sessionStorage.removeItem(CHART_DATA_TIMESTAMP_KEY);
+    }
+    startTransition(() => setPreloadedChartData({}));
+    if (chartFund?.code) {
+      setChartLoading(true);
+      fetchChartData(chartFund.code);
+    }
+    // 仅随数据源切换清缓存并重拉，不随 chartFund/fetchChartData 变化
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataSource]);
 
   // 当 chartFund 变化时，加载对应的图表数据
   useEffect(() => {

@@ -1,5 +1,7 @@
 version: '3.8'
 
+# 部署时使用宿主机时间：挂载 /etc/localtime 与 /etc/timezone（Linux），
+# 并设置 TZ 环境变量（可覆盖：在 .env 中写 TZ=Asia/Shanghai 或宿主机时区）
 services:
   app:
     build:
@@ -14,8 +16,11 @@ services:
       - PORT=8311
       - DB_PATH=/app/data/fund_data.db
       - SESSION_SECRET=${SESSION_SECRET:-change-this-secret-key}
+      - TZ=${TZ:-Asia/Shanghai}
     volumes:
       - ./backend/cache:/app/cache
+      # 使用宿主机时区（Linux 下挂载 localtime；无此文件时依赖上方 TZ 环境变量）
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:8311/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
       interval: 30s

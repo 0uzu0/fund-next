@@ -48,32 +48,29 @@ function FundChart({ labels, growth, netValues }: FundChartProps) {
     return { minG: min, maxG: max, hasZero: hasZeroLine };
   }, [growth]);
 
-  // 创建分段数据集（每个线段一个颜色）- 使用 useMemo 优化
-  // 优化：使用单个数据集配合 segment 函数，减少数据集数量
+  // 曲线颜色：高于 0 为红色，低于 0 为绿色（按线段分段着色）
   const datasets = useMemo(() => {
     if (growth.length <= 1) return [];
-    
-    // 优化：只创建一个数据集，使用 segment 函数动态改变颜色
-    // 这样可以大幅减少数据集数量，提升渲染性能
     return [{
       label: '',
       data: growth,
-      borderColor: (ctx: any) => {
-        const idx = ctx.p1DataIndex;
-        if (idx >= 0 && idx < growth.length) {
-          return growth[idx] >= 0 ? '#ff4d4f' : '#52c41a';
-        }
-        return '#ff4d4f';
-      },
-      backgroundColor: 'transparent',
       borderWidth: 1,
       pointRadius: 0,
       pointHoverRadius: 4,
       spanGaps: false,
+      backgroundColor: 'transparent',
+      segment: {
+        borderColor: (ctx: any) => {
+          const y0 = ctx.p0?.parsed?.y ?? 0;
+          const y1 = ctx.p1?.parsed?.y ?? 0;
+          const val = (Number(y0) + Number(y1)) / 2;
+          return val >= 0 ? '#ff4d4f' : '#52c41a';
+        },
+      },
     }];
   }, [growth]);
 
-  // 填充区域数据集 - 涨幅用红色，跌幅用浅绿色 - 使用 useMemo 优化
+  // 填充：大于 0 为淡红；小于 0 为渐变绿（从 0 到负数：由透明逐步加深）
   const fillDataset = useMemo(() => ({
     label: '',
     data: growth,
@@ -81,23 +78,32 @@ function FundChart({ labels, growth, netValues }: FundChartProps) {
     backgroundColor: (context: any) => {
       const chart = context.chart;
       const { ctx, chartArea } = chart;
-      if (!chartArea) return 'rgba(144, 238, 144, 0.2)';
-      
-      // 创建渐变，填充到0%基准线
+      const greenTransparent = 'rgba(82, 196, 26, 0)';   // 0 线处透明
+      const greenDeeper = 'rgba(82, 196, 26, 0.3)';     // 向负方向逐步加深
+      if (!chartArea) return greenDeeper;
+
       const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-      const zeroY = hasZero 
+      const zeroY = hasZero
         ? chartArea.top + (chartArea.bottom - chartArea.top) * (1 - (0 - minG) / (maxG - minG))
         : chartArea.bottom;
-      
-      const lastPct = growth[growth.length - 1];
-      if (lastPct >= 0) {
-        // 涨幅：红色渐变
-        gradient.addColorStop(0, 'rgba(255, 77, 79, 0.2)');
-        gradient.addColorStop(1, 'rgba(255, 77, 79, 0)');
+
+      if (!hasZero) {
+        if (minG >= 0) {
+          gradient.addColorStop(0, 'rgba(255, 77, 79, 0.18)');
+          gradient.addColorStop(1, 'rgba(255, 77, 79, 0)');
+        } else {
+          // 全在 0 下：从透明（上）逐步加深到底部
+          gradient.addColorStop(0, greenTransparent);
+          gradient.addColorStop(1, greenDeeper);
+        }
       } else {
-        // 跌幅：浅绿色渐变
-        gradient.addColorStop(0, 'rgba(144, 238, 144, 0.2)');
-        gradient.addColorStop(1, 'rgba(144, 238, 144, 0)');
+        const t = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
+        const tClamp = Math.max(0, Math.min(1, t));
+        gradient.addColorStop(0, 'rgba(255, 77, 79, 0.18)');
+        gradient.addColorStop(tClamp, 'rgba(255, 77, 79, 0)');
+        // 低于 0 区域：从 0 线（透明）向负数方向逐步加深
+        gradient.addColorStop(Math.min(tClamp + 0.002, 1), greenTransparent);
+        gradient.addColorStop(1, greenDeeper);
       }
       return gradient;
     },
