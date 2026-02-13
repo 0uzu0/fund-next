@@ -54,7 +54,7 @@ export default function SettingsScreen({ currentServerUrl, onSave, onClose }: Se
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-      const response = await fetch(`${url}/api/auth/me`, {
+      const response = await fetch(`${url}/api/health`, {
         method: 'GET',
         signal: controller.signal,
         headers: {
@@ -64,11 +64,11 @@ export default function SettingsScreen({ currentServerUrl, onSave, onClose }: Se
 
       clearTimeout(timeoutId);
 
-      if (response.ok || response.status === 401) {
-        // 200 或 401 都说明服务器可达
+      if (response.ok) {
+        // 健康检查无需登录，200 即说明服务器可达
         setTestResult({
           success: true,
-          message: `连接成功！服务器状态: ${response.status}`,
+          message: '连接成功！服务器正常',
         });
       } else {
         setTestResult({
