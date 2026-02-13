@@ -1,3 +1,4 @@
+# 服务端 CI/CD：构建测试 + Docker 镜像发布（自动/手动）
 name: CI/CD
 
 on:
@@ -9,67 +10,77 @@ on:
     branches: [ main, master ]
     paths-ignore:
       - 'mobile/**'
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: '镜像标签（留空为 latest；可填如 v1.0.0）'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   build:
     name: Build & Test
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18.x'
-      
+
       - uses: actions/cache@v4
         with:
           path: backend/node_modules
           key: backend-${{ hashFiles('backend/package-lock.json') }}
-      
+
       - uses: actions/cache@v4
         with:
           path: frontend/node_modules
           key: frontend-${{ hashFiles('frontend/package-lock.json') }}
-      
+
       - name: Install backend dependencies
         run: cd backend && npm ci
-      
+
       - name: Install frontend dependencies
         run: cd frontend && npm ci
-      
+
       - name: Check TypeScript
         run: cd frontend && npx tsc --noEmit || true
-      
+
       - name: Build frontend
         run: cd frontend && npm run build
         env:
           NEXT_PUBLIC_API_URL: ''
-  
+
   docker:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'pull_request'
+    if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped') && github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: docker/setup-buildx-action@v3
-      
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Build and push backend (with frontend)
+
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./backend/Dockerfile
+          file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ github.event.inputs.image_tag || 'latest' }}
+            ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,5 +1,6 @@
 # 本地构建并运行（不使用 Action 镜像时使用）
 # 用法：docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# .env 中需配置 SESSION_SECRET；DOCKER_IMAGE 可设为 fund-app:local（本构建会覆盖为同名镜像）
 version: '3.8'
 
 services:

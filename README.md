@@ -9,7 +9,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14.0-black)](https://nextjs.org/)
 [![Express](https://img.shields.io/badge/Express-4.18-green)](https://expressjs.com/)
 
-[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-部署指南) • [致谢](#-致谢)
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-docker-部署) • [使用说明](docs/使用说明.md) • [致谢](#-致谢)
 
 </div>
 
@@ -22,6 +22,7 @@
 - [快速开始](#-快速开始)
 - [Docker 部署](#-docker-部署)
 - [项目结构](#-项目结构)
+- [使用说明](#-使用说明)
 - [致谢](#-致谢)
 
 ## ✨ 功能特性
@@ -200,7 +201,7 @@ fund-next/
 | 方式 | 说明 |
 |------|------|
 | **自动构建** | 代码 push 到 `main` / `master` 后，CI/CD 会自动构建并推送镜像 `ghcr.io/<用户名>/<仓库名>:latest`。 |
-| **手动发布** | 在 GitHub 仓库 **Actions** 页选择 **「Docker 服务端镜像构建与发布」**，点击 **Run workflow**，可选填写镜像标签（如 `v1.0.0`），运行完成后即可拉取对应镜像。 |
+| **手动发布** | 在 GitHub 仓库 **Actions** 页选择 **「CI/CD」**，点击 **Run workflow**，可选填写镜像标签（如 `v1.0.0`），运行完成后即可拉取对应镜像。 |
 
 手动发布时若填写了标签（如 `v1.0.0`），会同时推送该标签与 `latest`；不填则仅更新 `latest`。
 
@@ -232,6 +233,14 @@ docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 访问：http://localhost:3000（前端）、http://localhost:8311（后端 API）。
+
+## 📖 使用说明
+
+服务端部署、手机端（Android APP）配置与日常使用详见：**[docs/使用说明.md](docs/使用说明.md)**，包括：
+
+- **服务端**：Docker 镜像部署、本地构建、源码运行、环境变量、端口与健康检查
+- **手机端**：APK 安装、首次配置服务器地址、登录、底部导航、设置页、常见问题
+- **二者关系**：同一服务端同时服务浏览器与 APP，数据一致
 
 ---
 

@@ -43,9 +43,8 @@ build/
 # Don't ignore frontend/out - it will be built in Docker
 .next/
 
-# Dependencies (will be installed in container)
+# Dependencies (installed in container; keep package-lock.json for reproducible build)
 node_modules/
-package-lock.json
 yarn.lock
 
 # OS

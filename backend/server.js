@@ -12,42 +12,53 @@ const { initDb } = require('./db');
 const cache = require('./cache');
 const authRoutes = require('./routes/auth');
 const fundApi = require('./routes/fundApi');
-const { loginRequired } = require('./auth');
 const chartDataScheduler = require('./services/chartDataScheduler');
 
-const PORT = process.env.PORT || 8311;
+// 配置（生产环境必须设置 SESSION_SECRET）
+const isProduction = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT) || 8311;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const sessionDir = process.env.SESSION_PATH || path.join(__dirname, 'data', 'sessions');
+
+if (isProduction && (!SESSION_SECRET || SESSION_SECRET.length < 16)) {
+  console.error('生产环境必须设置 SESSION_SECRET 且长度不少于 16 字符');
+  process.exit(1);
+}
+
 const app = express();
 
-// 响应压缩（优化：减少传输大小）
+// 响应压缩（减少传输大小）
 app.use(compression({
   filter: (req, res) => {
-    // 只压缩 JSON 和文本响应
-    if (req.headers['x-no-compression']) {
-      return false;
-    }
+    if (req.headers['x-no-compression']) return false;
     return compression.filter(req, res);
   },
-  level: 6, // 压缩级别（1-9，6 是平衡性能和压缩率）
-  threshold: 1024, // 只压缩大于 1KB 的响应
+  level: 6,
+  threshold: 1024,
 }));
 
-app.use(cors({ origin: true, credentials: true }));
+// CORS：可配置 CORS_ORIGIN（多个用逗号分隔），未配置则允许任意来源
+const corsOrigin = process.env.CORS_ORIGIN;
+const corsOptions = {
+  credentials: true,
+  origin: !corsOrigin ? true : corsOrigin.includes(',') ? corsOrigin.split(',').map(s => s.trim()) : corsOrigin.trim(),
+};
+app.use(cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-const sessionDir = process.env.SESSION_PATH || path.join(__dirname, 'data', 'sessions');
-if (process.env.NODE_ENV === 'production') {
-  try { fs.mkdirSync(sessionDir, { recursive: true }); } catch (e) { /* 可能无写权限，由 entrypoint 修复 */ }
+
+if (isProduction) {
+  try { fs.mkdirSync(sessionDir, { recursive: true }); } catch (e) { /* 由 entrypoint 修复权限 */ }
 }
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'luobobo',
+    secret: SESSION_SECRET || 'dev-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
-    store: process.env.NODE_ENV === 'production'
-      ? new FileStore({ path: sessionDir, ttl: 7 * 24 * 3600 })
-      : undefined,
+    cookie: { httpOnly: true, secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 },
+    store: isProduction ? new FileStore({ path: sessionDir, ttl: 7 * 24 * 3600 }) : undefined,
   })
 );
 
@@ -83,7 +94,6 @@ app.get(['/', '/fund', '/portfolio', '/market', '/market-indices', '/precious-me
 // Next 静态导出：优先返回对应 path 的 html 文件，否则 index.html
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/_next')) return next();
-  const fs = require('fs');
   const hasExt = path.extname(req.path);
   if (hasExt) return next();
   const base = req.path === '/' ? 'index' : req.path.slice(1).replace(/\//g, path.sep);
