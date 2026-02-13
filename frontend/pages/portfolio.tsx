@@ -287,7 +287,7 @@ export default function Portfolio() {
     if (selectedGroupId == null) return;
     const source = overrideSource ?? dataSource;
     const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}`;
-    apiGet<{ success: boolean; rows?: unknown[] }>(url, {
+    apiGet<{ success: boolean; rows?: FundRow[] }>(url, {
       cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` },
     })
       .then((res) => {

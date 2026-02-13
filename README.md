@@ -9,7 +9,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14.0-black)](https://nextjs.org/)
 [![Express](https://img.shields.io/badge/Express-4.18-green)](https://expressjs.com/)
 
-[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-部署指南) • [开发文档](#-开发文档)
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [部署指南](#-部署指南) • [致谢](#-致谢)
 
 </div>
 
@@ -22,6 +22,7 @@
 - [快速开始](#-快速开始)
 - [Docker 部署](#-docker-部署)
 - [项目结构](#-项目结构)
+- [致谢](#-致谢)
 
 ## ✨ 功能特性
 
@@ -206,3 +207,12 @@ docker-compose down
 ```
 
 访问：http://localhost:3000（前端）和 http://localhost:8311（后端 API）
+
+---
+
+## 🙏 致谢
+
+本项目的部分 **UI 设计**与 **数据接口** 参考或借鉴了以下开源项目，在此表示感谢：
+
+- **[lanZzV/fund](https://github.com/lanZzV/fund)** — 基金实时估值、黄金价格等 Web/CLI 工具，提供了丰富的页面布局与数据展示思路。
+- **[hzm0321/real-time-fund](https://github.com/hzm0321/real-time-fund)** — 基于 Next.js 的基金实时估值与重仓股追踪，采用玻璃拟态设计，数据源包括东方财富、腾讯财经等公开接口，为本项目的前端交互与数据获取方式提供了重要参考。
