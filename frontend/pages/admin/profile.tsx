@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
+import { API_BASE } from '../../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
-function getApiBase() {
-  if (API) return API;
-  if (typeof window !== 'undefined') return 'http://localhost:8311';
+function getApiBase(): string {
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
   return '';
 }
 

@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import { API_BASE } from '../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
+function getApiBase(): string {
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
 
 export default function Login() {
   const router = useRouter();
@@ -13,7 +18,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/api/auth/me`, { credentials: 'include' })
+    fetch(getApiBase() + '/api/auth/me', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(() => {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
@@ -27,7 +32,7 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/auth/login`, {
+      const res = await fetch(getApiBase() + '/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
