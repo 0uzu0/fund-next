@@ -146,9 +146,9 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
     setError(null);
   }, []);
 
-  // 加载完成
+  // 加载完成：仅关闭下拉刷新；loading 由 page_loaded 消息关闭，避免链接跳转时
+  // onLoadEnd 先于新页 onLoadStart 触发导致底部栏短暂露出再闪回「加载中」
   const onLoadEnd = useCallback(() => {
-    setLoading(false);
     setRefreshing(false);
   }, []);
 
