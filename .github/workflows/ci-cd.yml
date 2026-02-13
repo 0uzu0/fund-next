@@ -23,6 +23,8 @@ jobs:
     name: Build & Test
     runs-on: ubuntu-latest
     if: github.event_name != 'workflow_dispatch'
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +63,7 @@ jobs:
     if: always() && (needs.build.result == 'success' || needs.build.result == 'skipped') && github.event_name != 'pull_request'
     permissions:
       contents: read
-      packages: write
+      packages: write   # 推送镜像到 ghcr.io 必需
     steps:
       - uses: actions/checkout@v4
 

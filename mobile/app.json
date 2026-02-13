@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "LanFund",
+    "slug": "fund-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "scheme": "fund",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a2e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lanfund.mobile"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1a2e"
+      },
+      "package": "com.lanfund.mobile",
+      "usesCleartextTraffic": true
+    }
+  }
+}
