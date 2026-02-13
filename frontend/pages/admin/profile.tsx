@@ -26,7 +26,7 @@ export default function AdminProfile() {
         setAuth(data);
         if (!data.is_admin) router.replace('/portfolio');
       })
-      .catch(() => router.replace('/login'));
+      .catch(() => router.replace('/login?redirect=/admin/profile'));
   }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {

@@ -48,7 +48,7 @@ export default function AdminUsers() {
         if (!data.is_admin) router.replace('/portfolio');
         else fetchUsers();
       })
-      .catch(() => router.replace('/login'));
+      .catch(() => router.replace('/login?redirect=/admin/users'));
   }, [router]);
 
   const handleAddUser = async (e: React.FormEvent) => {

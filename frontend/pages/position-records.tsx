@@ -1,13 +1,12 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { apiGet, apiDelete, clearCache } from '../utils/apiClient';
+import { apiGet, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
-/** 开发时未配置 NEXT_PUBLIC_API_URL 时请求会发往 3000 导致 404，此处回退到后端 8311（仅用于客户端 fetch） */
+/** 与 apiClient 一致：有配置用配置，否则浏览器端用当前 origin（前后端同机部署时生效），避免 Failed to fetch */
 function getApiBase(): string {
-  if (API) return API;
-  if (typeof window !== 'undefined') return 'http://localhost:8311';
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
   return '';
 }
 
@@ -73,7 +72,7 @@ function PositionRecords() {
       })
       .catch((e) => {
         if (e.message === 'Unauthorized') {
-          router.push('/login');
+          router.push('/login?redirect=/position-records');
           return;
         }
         setAuth({ username: '' }); // 非 401 时也允许展示页面（显示错误信息）
