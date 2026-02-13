@@ -46,15 +46,15 @@ mobile/
 ## 功能特性
 
 - 📱 加载 LanFund Web 前端（后端同源托管）
-- ⚙️ 可配置服务器地址（局域网/公网）
+- ⚙️ 可配置服务器地址（局域网/公网）；首次启动无配置时进入设置页
 - 🔗 连接测试功能
 - 🔙 Android 返回键支持（WebView 历史后退）
-- 🏠 底部导航栏（后退、刷新、首页、设置）
-- 📱 移动端样式注入优化
+- 🏠 底部导航栏（与 Web 端 Sidebar 一致：持仓、记录、行情、设置）
+- 📱 移动端样式注入（安全区、触摸优化，与 frontend 主题一致）
 - 🔄 下拉刷新
-- 🌙 深色主题（与 Web 端一致）
+- 🌙 深色主题（与 frontend/styles/globals.css 变量一致）
 - 💾 服务器地址持久化存储
-- ⚡ 启动屏
+- ⚡ 启动屏与加载态（LanFund 品牌展示）
 
 ## 前提条件
 
@@ -187,7 +187,7 @@ npm run android
 
 ### 修改深色主题颜色
 
-编辑 `src/config.ts` 中的 `THEME` 对象。
+编辑 `src/config.ts` 中的 `THEME` 对象（与前端 `frontend/styles/globals.css` 的 `:root` 变量保持一致）。
 
 ### 添加更多 Android 权限
 

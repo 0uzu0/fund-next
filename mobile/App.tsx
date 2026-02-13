@@ -8,10 +8,10 @@
  * - 提供设置入口修改服务器地址
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, StatusBar } from 'react-native';
 import WebViewScreen from './src/WebViewScreen';
 import SettingsScreen from './src/SettingsScreen';
-import { getServerUrl } from './src/storage';
+import { getStoredServerUrl, getServerUrl } from './src/storage';
 import { THEME } from './src/config';
 
 type AppScreen = 'loading' | 'settings' | 'webview';
@@ -21,13 +21,13 @@ export default function App() {
   const [serverUrl, setServerUrl] = useState('');
   const [previousScreen, setPreviousScreen] = useState<AppScreen>('webview');
 
-  // 应用启动时加载服务器地址
+  // 应用启动时加载服务器地址（未配置过则进入设置页）
   useEffect(() => {
     (async () => {
-      const url = await getServerUrl();
+      const stored = await getStoredServerUrl();
+      const url = stored || (await getServerUrl());
       setServerUrl(url);
-      // 如果有保存的地址，直接进入 WebView；否则显示设置页
-      setScreen(url ? 'webview' : 'settings');
+      setScreen(stored ? 'webview' : 'settings');
     })();
   }, []);
 
@@ -48,11 +48,18 @@ export default function App() {
     setScreen('webview');
   }, []);
 
-  // 加载中
+  // 加载中（与前端深色主题一致）
   if (screen === 'loading') {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={THEME.background} />
+        <View style={styles.loadingCenter}>
+          <View style={styles.loadingLogo}>
+            <Text style={styles.loadingLogoText}>L</Text>
+          </View>
+          <Text style={styles.loadingTitle}>LanFund</Text>
+          <Text style={styles.loadingSubtitle}>智能基金管理系统</Text>
+        </View>
       </View>
     );
   }
@@ -81,5 +88,36 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: THEME.background,
+  },
+  loadingCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: THEME.cardBg,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  loadingLogoText: {
+    color: THEME.accent,
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  loadingTitle: {
+    color: THEME.textPrimary,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  loadingSubtitle: {
+    color: THEME.textSecondary,
+    fontSize: 13,
   },
 });

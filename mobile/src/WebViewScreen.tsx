@@ -20,92 +20,52 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
-  RefreshControl,
-  ScrollView,
-  Dimensions,
 } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
-import { THEME, USER_AGENT_SUFFIX, PAGE_LOAD_TIMEOUT } from './config';
+import { THEME, USER_AGENT_SUFFIX, BOTTOM_NAV_ROUTES, APP_VERSION } from './config';
 
 interface WebViewScreenProps {
   serverUrl: string;
   onOpenSettings: () => void;
 }
 
-/** 注入到 WebView 中的 JavaScript，用于优化移动端体验 */
-const INJECTED_JS = `
+/** 生成注入脚本（注入版本号，与前端 globals 一致的安全区/触摸优化） */
+function getInjectedJS(version: string): string {
+  return `
 (function() {
-  // 标识为 APP 内嵌浏览器
   window.__LANFUND_APP__ = true;
-  window.__LANFUND_APP_VERSION__ = '1.0';
+  window.__LANFUND_APP_VERSION__ = '${version.replace(/'/g, "\\'")}';
 
-  // 禁用 Web 端的长按弹出菜单（避免干扰原生手势）
-  document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-  });
+  document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
-  // 设置 viewport 适配移动端
   var meta = document.querySelector('meta[name="viewport"]');
   if (meta) {
     meta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover');
   }
 
-  // 注入移动端特定样式
   var style = document.createElement('style');
-  style.textContent = \`
-    /* 隐藏 Web 端不需要在 APP 中显示的元素 */
-    /* 如果需要隐藏顶部导航栏中的某些元素，可以在这里添加 */
-
-    /* 确保安全区域适配 */
-    body {
-      padding-top: env(safe-area-inset-top, 0px);
-      padding-bottom: env(safe-area-inset-bottom, 0px);
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior-y: none;
-    }
-
-    /* 移动端滚动优化 */
-    .content-area {
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* 防止文本选择 */
-    * {
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    /* 表格横向滚动优化 */
-    .table-container {
-      -webkit-overflow-scrolling: touch;
-    }
-  \`;
+  style.textContent = [
+    'body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; }',
+    '.content-area, .main-container { -webkit-overflow-scrolling: touch; }',
+    '* { -webkit-tap-highlight-color: transparent; }',
+    '.table-container { -webkit-overflow-scrolling: touch; }'
+  ].join(' ');
   document.head.appendChild(style);
 
-  // 通知 React Native 页面已加载
   if (window.ReactNativeWebView) {
-    window.ReactNativeWebView.postMessage(JSON.stringify({
-      type: 'page_loaded',
-      url: window.location.href,
-      title: document.title,
-    }));
+    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'page_loaded', url: window.location.href, title: document.title }));
   }
-
-  // 监听路由变化
   var _pushState = history.pushState;
   history.pushState = function() {
     _pushState.apply(this, arguments);
     if (window.ReactNativeWebView) {
-      window.ReactNativeWebView.postMessage(JSON.stringify({
-        type: 'navigation',
-        url: window.location.href,
-        title: document.title,
-      }));
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'navigation', url: window.location.href, title: document.title }));
     }
   };
-
-  true; // 返回 true 避免警告
+  true;
 })();
 `;
+}
 
 export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScreenProps) {
   const webViewRef = useRef<WebView>(null);
@@ -197,6 +157,16 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
     webViewRef.current?.reload();
   }, []);
 
+  // 导航到前端路由（与 Sidebar 路径一致）
+  const baseUrl = serverUrl.replace(/\/+$/, '');
+  const navigateTo = useCallback(
+    (path: string) => {
+      const url = `${baseUrl}${path.startsWith('/') ? path : '/' + path}`;
+      webViewRef.current?.injectJavaScript(`window.location.href = ${JSON.stringify(url)}; true;`);
+    },
+    [baseUrl]
+  );
+
   // 渲染错误页面
   if (error) {
     return (
@@ -235,7 +205,7 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
         onLoadEnd={onLoadEnd}
         onError={onError}
         onHttpError={onHttpError}
-        injectedJavaScript={INJECTED_JS}
+        injectedJavaScript={getInjectedJS(APP_VERSION)}
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={false}
@@ -265,44 +235,22 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
         </View>
       )}
 
-      {/* 底部工具栏（长按显示设置入口） */}
+      {/* 底部栏：与前端 Sidebar 主导航一致 */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity
-          style={styles.bottomBarButton}
-          onPress={() => {
-            if (canGoBack) webViewRef.current?.goBack();
-          }}
-          disabled={!canGoBack}
-          activeOpacity={0.6}
-        >
-          <Text style={[styles.bottomBarIcon, !canGoBack && styles.bottomBarIconDisabled]}>◀</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomBarButton}
-          onPress={() => webViewRef.current?.reload()}
-          activeOpacity={0.6}
-        >
-          <Text style={styles.bottomBarIcon}>🔄</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomBarButton}
-          onPress={() => {
-            // 导航到首页
-            webViewRef.current?.injectJavaScript(`window.location.href = '/portfolio'; true;`);
-          }}
-          activeOpacity={0.6}
-        >
-          <Text style={styles.bottomBarIcon}>🏠</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.bottomBarButton}
-          onPress={onOpenSettings}
-          activeOpacity={0.6}
-        >
+        {BOTTOM_NAV_ROUTES.map(({ path, icon, label }) => (
+          <TouchableOpacity
+            key={path}
+            style={styles.bottomBarButton}
+            onPress={() => navigateTo(path)}
+            activeOpacity={0.6}
+          >
+            <Text style={styles.bottomBarIcon}>{icon}</Text>
+            <Text style={styles.bottomBarLabel}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={styles.bottomBarButton} onPress={onOpenSettings} activeOpacity={0.6}>
           <Text style={styles.bottomBarIcon}>⚙️</Text>
+          <Text style={styles.bottomBarLabel}>设置</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -389,25 +337,28 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     flexDirection: 'row',
-    height: 48,
+    height: 56,
     backgroundColor: THEME.cardBg,
     borderTopWidth: 1,
     borderTopColor: THEME.border,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
+    paddingBottom: 4,
   },
   bottomBarButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   bottomBarIcon: {
-    fontSize: 18,
+    fontSize: 20,
     color: THEME.textSecondary,
+    marginBottom: 2,
   },
-  bottomBarIconDisabled: {
-    opacity: 0.3,
+  bottomBarLabel: {
+    fontSize: 11,
+    color: THEME.textSecondary,
   },
 });

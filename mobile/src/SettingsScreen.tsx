@@ -22,8 +22,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { THEME, APP_NAME, APP_VERSION, DEFAULT_SERVER_URL } from './config';
-import { getServerUrl, setServerUrl, clearAllData } from './storage';
+import Constants from 'expo-constants';
+import { THEME, APP_NAME, DEFAULT_SERVER_URL } from './config';
+import { setServerUrl, clearAllData } from './storage';
+
+const APP_VERSION = Constants.expoConfig?.version ?? Constants.manifest?.version ?? '1.0.0';
 
 interface SettingsScreenProps {
   currentServerUrl: string;
@@ -199,7 +202,7 @@ export default function SettingsScreen({ currentServerUrl, onSave, onClose }: Se
                   onPress={handleReset}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.buttonText}>↩️ 重置</Text>
+                  <Text style={styles.resetButtonText}>↩️ 重置</Text>
                 </TouchableOpacity>
               </View>
 
@@ -391,6 +394,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  resetButtonText: {
+    color: THEME.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },
