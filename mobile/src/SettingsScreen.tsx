@@ -93,22 +93,20 @@ export default function SettingsScreen({ currentServerUrl, onSave, onClose }: Se
     }
   }, [serverUrl]);
 
-  // 保存设置
+  // 保存设置（自动补全 http/https，便于用户只填域名:端口）
   const handleSave = useCallback(async () => {
-    const url = serverUrl.trim().replace(/\/+$/, '');
+    let url = serverUrl.trim().replace(/\/+$/, '');
     if (!url) {
       Alert.alert('提示', '请输入服务器地址');
       return;
     }
-
-    // 验证 URL 格式
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     try {
       new URL(url);
     } catch {
-      Alert.alert('提示', '请输入有效的 URL 地址，例如 http://192.168.1.100:8311');
+      Alert.alert('提示', '请输入有效的地址，例如 https://fund.example.com:8311 或 192.168.1.100:8311');
       return;
     }
-
     await setServerUrl(url);
     onSave(url);
   }, [serverUrl, onSave]);

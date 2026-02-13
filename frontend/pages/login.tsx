@@ -15,7 +15,10 @@ export default function Login() {
   useEffect(() => {
     fetch(`${API}/api/auth/me`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then(() => router.replace('/portfolio'))
+      .then(() => {
+        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
+        router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
+      })
       .catch(() => {});
   }, [router]);
 
@@ -31,7 +34,10 @@ export default function Login() {
         body: JSON.stringify({ username: username.trim(), password, remember_me: rememberMe }),
       });
       const data = await res.json();
-      if (data.success) router.replace('/portfolio');
+      if (data.success) {
+        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
+        router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
+      }
       else setError(data.message || '登录失败');
     } catch (err) {
       setError('网络错误');

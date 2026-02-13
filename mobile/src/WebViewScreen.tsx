@@ -22,7 +22,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { WebView, WebViewNavigation } from 'react-native-webview';
-import { THEME, USER_AGENT_SUFFIX, BOTTOM_NAV_ROUTES, APP_VERSION, PAGE_LOAD_TIMEOUT } from './config';
+import { THEME, USER_AGENT_SUFFIX, BOTTOM_NAV_ROUTES, APP_VERSION, PAGE_LOAD_TIMEOUT, normalizeServerUrl } from './config';
 
 interface WebViewScreenProps {
   serverUrl: string;
@@ -76,15 +76,27 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
   const [pageTitle, setPageTitle] = useState('LanFund');
   const [refreshing, setRefreshing] = useState(false);
 
+  // 规范化 URL（补全协议、去空格），无效则不加载
+  const loadUrl = (() => {
+    const normalized = normalizeServerUrl(serverUrl);
+    if (!normalized) return '';
+    try {
+      new URL(normalized);
+      return normalized;
+    } catch {
+      return '';
+    }
+  })();
+
   // 加载超时：服务器不可达时避免一直转圈
   useEffect(() => {
-    if (!loading || error) return;
+    if (!loadUrl || !loading || error) return;
     const timer = setTimeout(() => {
       setLoading(false);
-      setError('连接超时\n请检查手机与服务器是否在同一网络，或到设置中修改服务器地址');
+      setError('连接超时\n请检查网络与服务器地址，或到设置中修改后重试');
     }, PAGE_LOAD_TIMEOUT);
     return () => clearTimeout(timer);
-  }, [loading, error, serverUrl]);
+  }, [loadUrl, loading, error]);
 
   // Android 返回键处理
   useEffect(() => {
@@ -161,6 +173,23 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
     webViewRef.current?.reload();
   }, []);
 
+  // 无有效 URL 时不渲染 WebView
+  if (!loadUrl) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={THEME.background} />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorTitle}>连接失败</Text>
+          <Text style={styles.errorMessage}>服务器地址无效，请到设置中配置正确地址。</Text>
+          <TouchableOpacity style={styles.settingsButton} onPress={onOpenSettings} activeOpacity={0.7}>
+            <Text style={styles.settingsButtonText}>⚙️ 设置</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   // 下拉刷新
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -168,7 +197,7 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
   }, []);
 
   // 导航到前端路由（与 Sidebar 路径一致）
-  const baseUrl = serverUrl.replace(/\/+$/, '');
+  const baseUrl = loadUrl.replace(/\/+$/, '');
   const navigateTo = useCallback(
     (path: string) => {
       const url = `${baseUrl}${path.startsWith('/') ? path : '/' + path}`;
@@ -177,7 +206,7 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
     [baseUrl]
   );
 
-  // 渲染错误页面
+  // 无效 URL 或连接错误时显示错误页
   if (error) {
     return (
       <View style={styles.container}>
@@ -186,7 +215,7 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
           <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorTitle}>连接失败</Text>
           <Text style={styles.errorMessage}>{error}</Text>
-          <Text style={styles.errorUrl}>服务器地址: {serverUrl}</Text>
+          <Text style={styles.errorUrl}>服务器地址: {loadUrl || serverUrl || '未设置'}</Text>
           <View style={styles.errorActions}>
             <TouchableOpacity style={styles.retryButton} onPress={onRetry} activeOpacity={0.7}>
               <Text style={styles.retryButtonText}>🔄 重试</Text>
@@ -206,8 +235,9 @@ export default function WebViewScreen({ serverUrl, onOpenSettings }: WebViewScre
 
       {/* WebView */}
       <WebView
+        key={loadUrl}
         ref={webViewRef}
-        source={{ uri: serverUrl }}
+        source={{ uri: loadUrl }}
         style={styles.webview}
         onNavigationStateChange={onNavigationStateChange}
         onMessage={onMessage}

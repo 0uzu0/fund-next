@@ -29,7 +29,17 @@ export const APP_VERSION = '1.0.0';
 export const USER_AGENT_SUFFIX = 'LanFundApp/1.0';
 
 /** 页面加载超时时间（毫秒） */
-export const PAGE_LOAD_TIMEOUT = 15000;
+export const PAGE_LOAD_TIMEOUT = 20000;
+
+/**
+ * 规范化服务器地址：去空格、补全协议（无协议时默认 https）
+ */
+export function normalizeServerUrl(url: string): string {
+  const trimmed = url.trim().replace(/\/+$/, '');
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return 'https://' + trimmed;
+}
 
 /** 深色主题（与 frontend/styles/globals.css :root 一致） */
 export const THEME = {
