@@ -15,6 +15,7 @@ services:
       - PORT=8311
       - DB_PATH=/app/data/fund_data.db
       - SESSION_PATH=/app/data/sessions
+      # 在 .env 中写 SESSION_SECRET=明文密钥，不要写 ${SESSION_SECRET:xxx}
       - SESSION_SECRET=${SESSION_SECRET:-change-this-secret-key}
       - TZ=${TZ:-Asia/Shanghai}
     volumes:

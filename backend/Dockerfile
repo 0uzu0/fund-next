@@ -41,33 +41,27 @@ COPY --from=frontend-builder /app/frontend/public ./frontend/public
 # 创建数据目录
 RUN mkdir -p /app/cache
 
-# 生产环境镜像
+# 生产环境镜像（与根目录 Dockerfile 一致：entrypoint 修复卷权限后以 nodejs 启动）
 FROM node:18-alpine
 
 WORKDIR /app
 
-# 复制后端依赖和代码（包含前端构建产物）
-COPY --from=backend-builder /app/node_modules ./node_modules
-COPY --from=backend-builder /app .
-
-# 创建非 root 用户
-RUN addgroup -g 1001 -S nodejs && \
+RUN apk add --no-cache su-exec && \
+    addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# 创建必要的目录并设置权限
-RUN mkdir -p /app/cache /app/tmp && \
-    chown -R nodejs:nodejs /app/cache /app/tmp && \
+# 复制后端依赖和代码（包含前端构建产物、entrypoint.sh）
+COPY --from=backend-builder /app/node_modules ./node_modules
+COPY --from=backend-builder /app .
+RUN chmod +x /app/entrypoint.sh
+
+RUN mkdir -p /app/cache /app/tmp /app/data && \
+    chown -R nodejs:nodejs /app/cache /app/tmp /app/data && \
     chmod -R 755 /app/tmp
 
-# 切换到非 root 用户
-USER nodejs
-
-# 暴露端口
 EXPOSE 8311
 
-# 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8311/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# 启动应用
-CMD ["node", "server.js"]
+ENTRYPOINT ["/app/entrypoint.sh"]

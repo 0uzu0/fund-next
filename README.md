@@ -200,9 +200,10 @@ fund-next/
 CI 在 push 到 main/master 后会自动构建并推送镜像到 GitHub Container Registry。在项目根目录创建 `.env` 并设置镜像地址后即可直接拉取运行：
 
 ```bash
-# 创建 .env，填入你的镜像地址（与 GitHub 仓库对应）
-echo "DOCKER_IMAGE=ghcr.io/<你的 GitHub 用户名>/<仓库名>:latest" >> .env
-# 例如：DOCKER_IMAGE=ghcr.io/username/fund-next:latest
+# 创建 .env（可复制 .env.example 后修改），例如：
+#   DOCKER_IMAGE=ghcr.io/username/fund-next:latest
+#   SESSION_SECRET=一串随机密钥或 UUID
+# 注意：SESSION_SECRET 直接写明文，不要写 ${SESSION_SECRET:xxx}，否则 Compose 会报错
 
 docker-compose up -d
 
