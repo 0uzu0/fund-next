@@ -1,0 +1,10 @@
+# 本地构建并运行（不使用 Action 镜像时使用）
+# 用法：docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    image: fund-app:local

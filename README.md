@@ -195,8 +195,15 @@ fund-next/
 
 ## 🐳 Docker 部署
 
+### 使用 Action 打包的镜像（推荐）
+
+CI 在 push 到 main/master 后会自动构建并推送镜像到 GitHub Container Registry。在项目根目录创建 `.env` 并设置镜像地址后即可直接拉取运行：
+
 ```bash
-# 启动所有服务
+# 创建 .env，填入你的镜像地址（与 GitHub 仓库对应）
+echo "DOCKER_IMAGE=ghcr.io/<你的 GitHub 用户名>/<仓库名>:latest" >> .env
+# 例如：DOCKER_IMAGE=ghcr.io/username/fund-next:latest
+
 docker-compose up -d
 
 # 查看日志
@@ -204,6 +211,14 @@ docker-compose logs -f
 
 # 停止服务
 docker-compose down
+```
+
+### 本地构建并运行
+
+若需在本地构建镜像而非使用 Action 镜像：
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 访问：http://localhost:3000（前端）和 http://localhost:8311（后端 API）
