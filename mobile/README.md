@@ -88,4 +88,6 @@ APK 输出在 `android/app/build/outputs/apk/release/`。Windows 下可改用 `g
 | 行业板块 | `/sectors`            |
 | 用户管理 | `/admin/profile`     |
 
-使用前请先在前端完成登录；WebView 会携带 Cookie，与浏览器登录态一致（需前后端同域或正确配置 Cookie 域）。
+使用前请先在前端完成登录；WebView 会携带 Cookie，与浏览器登录态一致（需前后端同域或正确配置 Cookie 域）。未登录时各页会跳转到登录页，登录成功后会按 `redirect` 参数跳回原页面（如贵金属行情 → 登录 → 仍回到贵金属行情）。
+
+**若出现 net::ERR_CLEARTEXT_NOT_PERMITTED**：已在本项目中开启 Android 明文流量（`usesCleartextTraffic`）。请重新执行 `npx expo prebuild --platform android --clean` 并重新打包 APK 后重试；真机开发时请在 `mobile/.env` 中设置 `EXPO_PUBLIC_WEB_URL=http://你的电脑IP:3000`。

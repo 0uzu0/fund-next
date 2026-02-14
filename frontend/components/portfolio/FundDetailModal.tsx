@@ -1,5 +1,6 @@
 import type { FundRow } from '../../types/portfolio';
 import { toNum, formatMoney, formatPct, formatYuan } from '../../lib/format';
+import { isEstimateStale } from '../../lib/portfolioHelpers';
 
 export type DetailHolding = { code: string; name: string; weight: string; change: number | null };
 
@@ -27,8 +28,9 @@ export default function FundDetailModal({
   const netStr = String(row.netValue ?? '');
   const numMatch = netStr.match(/^([\d.]+)/);
   const unitNet = numMatch ? numMatch[1] : '—';
+  const estStale = isEstimateStale(row.estimateDate);
   const estPctNum = toNum(row.estPct);
-  const estNet = numMatch && Number.isFinite(estPctNum) ? (parseFloat(numMatch[1]) * (1 + estPctNum / 100)).toFixed(4) : '—';
+  const estNet = estStale ? '—' : (numMatch && Number.isFinite(estPctNum) ? (parseFloat(numMatch[1]) * (1 + estPctNum / 100)).toFixed(4) : '—');
 
   const valuationTime = row.nowTime && String(row.nowTime).trim() && row.nowTime !== '—' ? String(row.nowTime) : '—';
 
@@ -49,9 +51,9 @@ export default function FundDetailModal({
         <div className="fund-detail-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px', marginBottom: 16 }}>
           <div><span style={{ color: 'var(--text-dim)' }}>单位净值</span><div className="fund-detail-value" style={{ fontWeight: 600, marginTop: 2 }}>{unitNet}</div></div>
           <div><span style={{ color: 'var(--text-dim)' }}>估值净值</span><div className="fund-detail-value" style={{ fontWeight: 600, marginTop: 2 }}>{estNet}</div></div>
-          <div><span style={{ color: 'var(--text-dim)' }}>估值涨跌幅</span><div className={`fund-detail-value ${estPctNum >= 0 ? 'positive' : 'negative'}`} style={{ fontWeight: 600, marginTop: 2 }}>{row.estPct != null && String(row.estPct) !== '' ? formatPct(row.estPct) : '—'}</div></div>
+          <div><span style={{ color: 'var(--text-dim)' }}>估值涨跌幅</span><div className={`fund-detail-value ${!estStale && estPctNum >= 0 ? 'positive' : !estStale && estPctNum < 0 ? 'negative' : ''}`} style={{ fontWeight: 600, marginTop: 2 }}>{estStale ? '—' : (row.estPct != null && String(row.estPct) !== '' ? formatPct(row.estPct) : '—')}</div></div>
           <div><span style={{ color: 'var(--text-dim)' }}>持仓金额</span><div className="fund-detail-value" style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatYuan(row.holding)}</div></div>
-          <div><span style={{ color: 'var(--text-dim)' }}>当日盈亏</span><div className={`fund-detail-value ${toNum(row.estAmount) >= 0 ? 'positive' : 'negative'}`} style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatMoney(row.estAmount)}</div></div>
+          <div><span style={{ color: 'var(--text-dim)' }}>当日盈亏</span><div className={`fund-detail-value ${!estStale && toNum(row.estAmount) >= 0 ? 'positive' : !estStale && toNum(row.estAmount) < 0 ? 'negative' : ''}`} style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : (estStale ? '—' : formatMoney(row.estAmount))}</div></div>
           <div><span style={{ color: 'var(--text-dim)' }}>持有收益</span><div className={`fund-detail-value ${toNum(row.cumulative) >= 0 ? 'positive' : 'negative'}`} style={{ fontWeight: 600, marginTop: 2 }}>{hideSensitiveValues ? '****' : formatMoney(row.cumulative)}</div></div>
         </div>
         <div className="fund-detail-holdings" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>

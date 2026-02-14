@@ -54,11 +54,13 @@ async function searchOneCode(fund, fundData, sectors = []) {
 
   let nowTime = 'N/A';
   let forecastGrowth = 'N/A';
+  let estimateDate = '';
   if (intradayList && intradayList.length > 0) {
     const last = intradayList[intradayList.length - 1];
     const d = new Date(last.time);
     nowTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     forecastGrowth = (Math.round(parseFloat(last.forecastGrowth) * 100 * 100) / 100) + '%';
+    estimateDate = d.toISOString().slice(0, 10);
   }
 
   let consecutiveCount = 0;
@@ -115,6 +117,7 @@ async function searchOneCode(fund, fundData, sectors = []) {
     dayOfGrowth,
     consecutiveInfo,
     monthlyInfo,
+    estimateDate,
   ];
 }
 
@@ -136,6 +139,7 @@ async function searchCode(fundMap) {
         '—',
         '—',
         '—',
+        '',
       ])
     )
   );
@@ -150,7 +154,7 @@ async function searchCode(fundMap) {
 
 /**
  * 将 searchCode 结果与用户持仓合并，得到带持仓金额、预估收益、累计收益的行（与 Python calculate_position_summary 一致）
- * @param {Array<[string, string, string, string, string, string, string, string]>} resultRows - searchCode 返回
+ * @param {Array<[string, string, string, string, string, string, string, string, string?]>} resultRows - searchCode 返回，第9项为估值日期 YYYY-MM-DD
  * @param {Record<string, { shares?: number, holding_units?: number, cost_per_unit?: number }>} fundMap - 用户基金与份额
  * @returns {Array<{ code: string, name: string, holding: number, estAmount: number, estPct: number, actualAmount: number, actualPct: number, cumulative: number }>}
  */
@@ -159,7 +163,8 @@ function buildPositionRows(resultRows, fundMap) {
   const rows = [];
 
   for (const row of resultRows) {
-    const [code, name, nowTime, netValueStr, estimatedGrowthStr, dayGrowthStr, consecutiveInfo, monthlyInfo] = row;
+    const [code, name, nowTime, netValueStr, estimatedGrowthStr, dayGrowthStr, consecutiveInfo, monthlyInfo, estimateDateRaw] = row;
+    const estimateDate = (typeof estimateDateRaw === 'string' && estimateDateRaw.trim()) ? estimateDateRaw.trim() : '';
     const cache = fundMap[code] || {};
     let shares = cache.shares || 0;
     let holdingUnits = cache.holding_units;
@@ -220,6 +225,7 @@ function buildPositionRows(resultRows, fundMap) {
       monthlyInfo: String(monthlyInfo || '').trim() || '—',
       holding_units: Number(holdingUnits),
       cost_per_unit: Number(costPerUnit),
+      estimateDate,
     });
   }
 

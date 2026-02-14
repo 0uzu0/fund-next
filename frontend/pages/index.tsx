@@ -6,8 +6,8 @@ export default function Index() {
   useEffect(() => {
     const api = process.env.NEXT_PUBLIC_API_URL || '';
     fetch(`${api}/api/auth/me`, { credentials: 'include' })
-      .then((r) => (r.ok ? router.replace('/portfolio') : router.replace('/login')))
-      .catch(() => router.replace('/login'));
+      .then((r) => (r.ok ? router.replace('/portfolio') : router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/portfolio'))))
+      .catch(() => router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/portfolio')));
   }, [router]);
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

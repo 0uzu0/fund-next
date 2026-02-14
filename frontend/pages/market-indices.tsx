@@ -45,7 +45,7 @@ function MarketIndices() {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)
-      .catch(() => router.replace('/login'));
+      .catch(() => router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/market-indices')));
   }, [router]);
 
   const loadIndices = useCallback(() => {

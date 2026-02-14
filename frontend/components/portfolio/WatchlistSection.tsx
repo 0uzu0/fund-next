@@ -1,5 +1,6 @@
 import type { FundRow, Group } from '../../types/portfolio';
 import { toNum, formatPct } from '../../lib/format';
+import { isEstimateStale } from '../../lib/portfolioHelpers';
 
 export type WatchlistSortState = { col: number; dir: 'asc' | 'desc' } | null;
 
@@ -40,7 +41,7 @@ type WatchlistSectionProps = {
 
 const COLS = [
   { key: 2, label: '净值' },
-  { key: 3, label: '今日涨幅' },
+  { key: 3, label: '预估涨幅' },
   { key: 4, label: '昨日涨幅' },
   { key: 5, label: '连涨/跌' },
   { key: 6, label: '近30天' },
@@ -227,7 +228,7 @@ export default function WatchlistSection({
                   title="点击查看详情"
                 >{String(r.name ?? '')}</td>
                 <td style={{ fontFamily: 'var(--font-mono)' }}>{r.netValue != null && r.netValue !== '' ? String(r.netValue) : '—'}</td>
-                <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{r.estPct != null && String(r.estPct) !== '' ? formatPct(r.estPct) : '—'}</td>
+                <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{isEstimateStale(r.estimateDate) ? '—' : (r.estPct != null && String(r.estPct) !== '' ? formatPct(r.estPct) : '—')}</td>
                 <td className={String(r.dayOfGrowth ?? '').startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{r.dayOfGrowth != null && r.dayOfGrowth !== '' ? String(r.dayOfGrowth) : '—'}</td>
                 <td style={{ fontFamily: 'var(--font-mono)' }} title={((r.consecutiveInfo == null || r.consecutiveInfo === '') && tiantianNoDataTitle) || undefined}>{r.consecutiveInfo != null && r.consecutiveInfo !== '' ? String(r.consecutiveInfo) : '—'}</td>
                 <td style={{ fontFamily: 'var(--font-mono)' }} title={((r.monthlyInfo == null || r.monthlyInfo === '') && tiantianNoDataTitle) || undefined}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>

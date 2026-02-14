@@ -18,6 +18,8 @@ export type FundRow = {
   monthlyInfo?: string;
   holding_units?: number;
   cost_per_unit?: number;
+  /** 估值数据对应的日期 YYYY-MM-DD，用于判断次日9:30后是否未更新 */
+  estimateDate?: string;
 };
 
 export type Summary = {

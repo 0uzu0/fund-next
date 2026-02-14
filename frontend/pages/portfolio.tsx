@@ -11,6 +11,7 @@ import {
   parseNetValue,
   addDaysToDate,
   getTodayStr,
+  isEstimateStale,
   parseCodeFromInput,
   PENDING_ADD_KEY,
   PENDING_REDUCE_KEY,
@@ -281,7 +282,7 @@ export default function Portfolio() {
 
 
   useEffect(() => {
-    fetchAuth().then(() => fetchData()).catch(() => router.replace('/login'));
+    fetchAuth().then(() => fetchData()).catch(() => router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/portfolio')));
   }, []);
 
   useEffect(() => {
@@ -992,6 +993,10 @@ export default function Portfolio() {
   const displayTotalHolding = useMemo(() => displayFundRows.reduce((s, r) => s + r.displayHolding, 0), [displayFundRows]);
   const displayTodayEstPct = displayTotalHolding > 0 ? (summary.todayEstChange / displayTotalHolding) * 100 : summary.todayEstPct;
   const displayCumulative = summary.cumulative - cumulativeCorrection;
+  const isSummaryEstimateStale = useMemo(() => {
+    const first = fundRows.find((r) => toNum(r.holding) > 0) || fundRows[0];
+    return first ? isEstimateStale(first.estimateDate) : false;
+  }, [fundRows]);
 
   const openCumulativeCorrectionModal = () => {
     setCumulativeCorrectionInput(cumulativeCorrection === 0 ? '' : String(cumulativeCorrection));
@@ -1032,7 +1037,7 @@ export default function Portfolio() {
               if (typeof window !== 'undefined') localStorage.setItem('portfolio_data_source', v);
               clearCache('portfolio/table');
               clearCache('chart-data');
-              // 切换数据源时只更新：预估收益、预估涨跌、今日涨幅、图表（实际收益/昨日涨幅/连涨跌/近30天由后端主备合并，不随切换变化）
+              // 切换数据源时只更新：预估收益、预估涨跌、预估涨幅、图表（实际收益/昨日涨幅/连涨跌/近30天由后端主备合并，不随切换变化）
               fetchData(v);
               if (selectedGroupId != null) fetchWatchlist(v);
             }}
@@ -1645,6 +1650,7 @@ export default function Portfolio() {
               displayTotalHolding={displayTotalHolding}
               displayTodayEstPct={displayTodayEstPct}
               displayCumulative={displayCumulative}
+              isSummaryEstimateStale={isSummaryEstimateStale}
               onShowShowoff={() => setShowShowoffModal(true)}
               onToggleSensitive={() => {
                 const next = !hideSensitiveValues;

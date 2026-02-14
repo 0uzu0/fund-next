@@ -7,6 +7,8 @@ type PortfolioSummaryBarProps = {
   displayTotalHolding: number;
   displayTodayEstPct: number;
   displayCumulative: number;
+  /** 次日9:30之后估值未更新时为 true，今日预估涨跌显示 — */
+  isSummaryEstimateStale?: boolean;
   onShowShowoff: () => void;
   onToggleSensitive: () => void;
   onCumulativeCorrection: () => void;
@@ -18,6 +20,7 @@ export default function PortfolioSummaryBar({
   displayTotalHolding,
   displayTodayEstPct,
   displayCumulative,
+  isSummaryEstimateStale = false,
   onShowShowoff,
   onToggleSensitive,
   onCumulativeCorrection,
@@ -61,8 +64,8 @@ export default function PortfolioSummaryBar({
         </div>
         <div className="summary-card">
           <div className="summary-label">今日预估涨跌</div>
-          <div className={`summary-value ${summary.todayEstChange >= 0 ? 'positive' : 'negative'}`}>
-            {hideSensitiveValues ? '****' : `${formatMoney(summary.todayEstChange)} (${formatPct(displayTodayEstPct)})`}
+          <div className={`summary-value ${!isSummaryEstimateStale && summary.todayEstChange >= 0 ? 'positive' : !isSummaryEstimateStale && summary.todayEstChange < 0 ? 'negative' : ''}`}>
+            {hideSensitiveValues ? '****' : (isSummaryEstimateStale ? '—' : `${formatMoney(summary.todayEstChange)} (${formatPct(displayTodayEstPct)})`)}
           </div>
         </div>
         <div className="summary-card">

@@ -1,5 +1,6 @@
 import type { HoldingRow } from '../../types/portfolio';
 import { toNum, formatMoney, formatPct, formatYuan } from '../../lib/format';
+import { isEstimateStale } from '../../lib/portfolioHelpers';
 
 export type HoldingSortState = { col: number; dir: 'asc' | 'desc' } | null;
 
@@ -100,8 +101,8 @@ export default function HoldingTable({
                   title="查看详情"
                 >{String(r.name ?? '')}</td>
                 <td style={{ fontFamily: 'var(--font-mono)' }}>{hideSensitiveValues ? '****' : formatYuan(r.displayHolding)}</td>
-                <td className={toNum(r.estAmount) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.estAmount)}</td>
-                <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatPct(r.estPct)}</td>
+                <td className={toNum(r.estAmount) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (isEstimateStale(r.estimateDate) ? '—' : formatMoney(r.estAmount))}</td>
+                <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (isEstimateStale(r.estimateDate) ? '—' : formatPct(r.estPct))}</td>
                 <td className={toNum(r.actualAmount) >= 0 ? 'positive' : 'negative'}>{
                   hideSensitiveValues ? '****' : (r.actualAmount != null && Number.isFinite(Number(r.actualAmount)) && toNum(r.actualAmount) !== 0 ? formatMoney(r.actualAmount) : '—')
                 }</td>

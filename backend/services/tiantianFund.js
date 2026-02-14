@@ -64,7 +64,7 @@ async function searchCodeTiantian(fundMap) {
       if (sectors.length) name = name + ` 🏷️ ${sectors.join(', ')}`;
 
       if (!gz) {
-        return [code, name, '—', '—', 'N/A', '—', '—', '—', ''];
+        return [code, name, '—', '—', 'N/A', '—', '—', '—', '', ''];
       }
 
       const dwjz = gz.dwjz != null ? String(gz.dwjz).trim() : '';
@@ -77,6 +77,7 @@ async function searchCodeTiantian(fundMap) {
       const nowTime = (gz.gztime && String(gz.gztime).trim()) || '—';
       const dayOfGrowth = Number.isFinite(gszzlNum) ? forecastGrowth : '—';
 
+      const estimateDate = gsz ? today : '';
       return [
         code,
         name,
@@ -87,6 +88,7 @@ async function searchCodeTiantian(fundMap) {
         '—',
         '—',
         netValueForActual,
+        estimateDate,
       ];
     })
   );

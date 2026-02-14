@@ -655,6 +655,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
           monthlyInfo: '—',
           holding_units: Number(r.holding_units) || 0,
           cost_per_unit: Number(r.cost_per_unit) || 1,
+          estimateDate: '',
         });
       }
       return list;
@@ -693,7 +694,8 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         const dayOfGrowth = dayGrowthPrimary || dayGrowthBackup || '—';
         const consecutiveInfo = (r123 && r123[6] && String(r123[6]).trim() !== '—' ? r123[6] : null) || '—';
         const monthlyInfo = (r123 && r123[7] && String(r123[7]).trim() !== '—' ? r123[7] : null) || '—';
-        merged.push([code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo]);
+        const estimateDate = (liveFromTT && liveFromTT[9] && String(liveFromTT[9]).trim()) ? String(liveFromTT[9]).trim() : (r123 && r123[8] && String(r123[8]).trim() ? String(r123[8]).trim() : '');
+        merged.push([code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo, estimateDate]);
       }
       merged.sort((a, b) => {
         const pctA = a[4] === 'N/A' ? -99 : parseFloat(String(a[4]).replace('%', ''));

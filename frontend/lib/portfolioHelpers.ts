@@ -19,6 +19,20 @@ export function getTodayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * 是否“次日9:30之后估值数据未更新”：当前时间已过当日 9:30 且估值日期早于当日则视为未更新，应显示 "-"
+ */
+export function isEstimateStale(estimateDate: string | undefined): boolean {
+  const now = new Date();
+  const today = getTodayStr();
+  const hour = now.getHours();
+  const min = now.getMinutes();
+  const afterCutoff = hour > 9 || (hour === 9 && min >= 30);
+  if (!afterCutoff) return false;
+  if (!estimateDate || String(estimateDate).trim() === '') return true;
+  return String(estimateDate).trim() < today;
+}
+
 /** 从输入中解析基金代码（支持 "123456" 或 "123456 - 名称"） */
 export function parseCodeFromInput(val: string): string {
   const t = val.trim();

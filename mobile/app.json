@@ -8,7 +8,7 @@
     "scheme": "fund",
     "splash": { "resizeMode": "contain", "backgroundColor": "#1a1a2e" },
     "plugins": [
-      ["expo-build-properties", { "android": { "kotlinVersion": "1.9.25" } }]
+      ["expo-build-properties", { "android": { "kotlinVersion": "1.9.25", "usesCleartextTraffic": true } }]
     ],
     "ios": { "supportsTablet": true, "bundleIdentifier": "com.lanfund.mobile" },
     "android": {
