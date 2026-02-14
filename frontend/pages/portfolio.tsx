@@ -1008,7 +1008,7 @@ export default function Portfolio() {
       fundRows.forEach((r) => {
         const hold = toNum(r.holding);
         if (hold <= 0) return;
-        parts.push(`- ${r.code} ${r.name || ''} 份额${hold} 今日预估${formatPct(r.todayEstPct ?? 0)}`);
+        parts.push(`- ${r.code} ${r.name || ''} 份额${hold} 今日预估${formatPct(r.estPct ?? 0)}`);
       });
     }
     return parts.join('\n');

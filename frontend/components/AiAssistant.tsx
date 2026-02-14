@@ -35,7 +35,14 @@ const markdownComponents: React.ComponentProps<typeof ReactMarkdown>['components
   h1: ({ children }) => <div style={{ ...markdownBlockStyle, fontWeight: 600, marginBottom: 8, fontSize: '1.1em' }}>{children}</div>,
   h2: ({ children }) => <div style={{ ...markdownBlockStyle, fontWeight: 600, marginBottom: 6, fontSize: '1.05em' }}>{children}</div>,
   h3: ({ children }) => <div style={{ ...markdownBlockStyle, fontWeight: 600, marginBottom: 4 }}>{children}</div>,
-  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>{children}</a>,
+  a: ({ href, children }) => {
+    const safeHref = href && !/^\s*javascript:/i.test(href) && !/^\s*data:/i.test(href) ? href : '#';
+    return (
+      <a href={safeHref} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline' }}>
+        {children}
+      </a>
+    );
+  },
 };
 
 export type AiMessage = { role: 'user' | 'assistant'; content: string };
@@ -84,7 +91,9 @@ export default function AiAssistant({ context }: AiAssistantProps) {
         body
       );
       if (res?.success && res.reply != null) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: res.reply! }]);
+        const reply = String(res.reply).trim();
+        if (reply) setMessages((prev) => [...prev, { role: 'assistant', content: reply }]);
+        else toast.error('AI 返回内容为空');
       } else {
         toast.error(res?.message || 'AI 回复失败');
       }

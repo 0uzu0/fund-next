@@ -31,7 +31,13 @@ router.post('/api/ai/chat', loginRequired, async (req, res) => {
     return res.status(400).json({ success: false, message: '请提供 messages 数组' });
   }
 
-  const apiMessages = [...messages];
+  const apiMessages = messages
+    .filter((m) => m && typeof m.role === 'string' && typeof m.content === 'string')
+    .map((m) => ({ role: m.role, content: String(m.content) }));
+  if (apiMessages.length === 0) {
+    return res.status(400).json({ success: false, message: 'messages 需包含有效的 role 与 content' });
+  }
+
   if (context && typeof context === 'string') {
     apiMessages.unshift({
       role: 'system',
@@ -40,7 +46,8 @@ router.post('/api/ai/chat', loginRequired, async (req, res) => {
   }
 
   try {
-    const chatUrl = AI_API_URL.replace(/\/$/, '') + '/v1/chat/completions';
+    const base = AI_API_URL.replace(/\/$/, '');
+    const chatUrl = base.endsWith('/v1') ? base + '/chat/completions' : base + '/v1/chat/completions';
     const response = await axios.post(
       chatUrl,
       {
