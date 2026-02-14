@@ -68,19 +68,12 @@ jobs:
             echo "url=" >> $GITHUB_OUTPUT
           fi
 
-      - name: Generate Android project
+      # 与本地构建一致：使用 mobile/scripts/build-apk.js（prebuild ± --clean、local.properties、gradlew assembleRelease）
+      - name: Build APK (local script)
         working-directory: mobile
         env:
           EXPO_PUBLIC_WEB_URL: ${{ steps.weburl.outputs.url }}
-        run: npx expo prebuild --platform android --clean
-
-      - name: Build Release APK
-        working-directory: mobile/android
-        env:
-          EXPO_PUBLIC_WEB_URL: ${{ steps.weburl.outputs.url }}
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+        run: node scripts/build-apk.js
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

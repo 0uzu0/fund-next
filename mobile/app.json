@@ -25,6 +25,7 @@
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#1a1a2e"
       },
       "package": "com.lanfund.mobile",
