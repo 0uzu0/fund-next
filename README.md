@@ -183,9 +183,15 @@ fund-next/
 │   ├── styles/           # 样式文件
 │   └── package.json
 │
+├── mobile/                # MoreFund 安卓端（React Native / Expo）
+│   ├── src/              # 应用源码
+│   ├── scripts/          # 构建脚本（如 build-apk.js）
+│   ├── .github/workflows/# 独立仓库用 CI（可抽离为新项目）
+│   └── README.md         # 独立项目说明
+│
 ├── .github/               # GitHub Actions
 │   └── workflows/
-│       └── ci-cd.yml     # CI/CD 配置
+│       └── android-apk.yml # 安卓 APK 构建与发布
 │
 ├── docker-compose.yml     # Docker Compose 配置
 ├── Dockerfile             # Docker 配置（根目录）
@@ -193,6 +199,7 @@ fund-next/
 └── README.md             # 项目文档
 ```
 
+**安卓端抽离**：`mobile/` 为独立项目，可整体复制为新仓库单独维护；其内 `package.json`、`README.md` 与 `.github/workflows/android-apk.yml` 已按「项目根目录即本 App」配置，克隆后在本目录执行 `npm install`、`npm run build:apk` 即可。
 
 ## 🐳 Docker 部署
 
