@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "LanFund",
-    "slug": "fund-mobile",
+    "name": "魔方",
+    "slug": "morefund-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "scheme": "fund",
+    "scheme": "morefund",
     "icon": "./assets/icon.png",
     "splash": {
       "resizeMode": "contain",
@@ -21,14 +21,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.lanfund.mobile"
+      "bundleIdentifier": "com.morefund.mobile"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#1a1a2e"
       },
-      "package": "com.lanfund.mobile",
+      "package": "com.morefund.mobile",
       "usesCleartextTraffic": true
     }
   }

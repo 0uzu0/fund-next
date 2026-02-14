@@ -25,7 +25,7 @@ function TabIcon({ icon }: { icon: string }) {
   return <Text style={{ fontSize: 20 }}>{icon}</Text>;
 }
 
-function MainTabs() {
+function MainTabs({ onNavigateToLogin }: { onNavigateToLogin?: () => void }) {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -39,6 +39,8 @@ function MainTabs() {
         tabBarLabelStyle: {
           fontSize: 11,
         },
+        unmountOnBlur: false,
+        sceneContainerStyle: { backgroundColor: '#1a1a2e' },
       }}
     >
       {TabScreens.map(({ name, path, label, icon }) => (
@@ -50,7 +52,7 @@ function MainTabs() {
             tabBarIcon: () => <TabIcon icon={icon} />,
           }}
         >
-          {() => <WebViewScreen path={path} />}
+          {() => <WebViewScreen path={path} onNavigateToLogin={onNavigateToLogin} />}
         </Tab.Screen>
       ))}
     </Tab.Navigator>
@@ -92,7 +94,15 @@ function RootStack() {
           />
         )}
       </Stack.Screen>
-      <Stack.Screen name="Main" component={MainTabs} />
+      <Stack.Screen name="Main">
+        {({ navigation }) => (
+          <MainTabs
+            onNavigateToLogin={() =>
+              navigation.reset({ index: 0, routes: [{ name: 'Login' as never }] })
+            }
+          />
+        )}
+      </Stack.Screen>
     </Stack.Navigator>
   );
 }

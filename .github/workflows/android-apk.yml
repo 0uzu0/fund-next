@@ -59,7 +59,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lanfund-android-apk
+          name: morefund-android-apk
           path: mobile/android/app/build/outputs/apk/release/app-release.apk
 
   release:
@@ -75,7 +75,7 @@ jobs:
       - name: Download APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: lanfund-android-apk
+          name: morefund-android-apk
 
       - name: Set release tag
         id: tag
@@ -87,14 +87,14 @@ jobs:
           fi
 
       - name: Rename APK for release
-        run: mv app-release.apk "lanfund-${{ steps.tag.outputs.tag }}.apk"
+        run: mv app-release.apk "morefund-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Create Release and Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: Release ${{ steps.tag.outputs.tag }}
-          files: "lanfund-${{ steps.tag.outputs.tag }}.apk"
+          files: "morefund-${{ steps.tag.outputs.tag }}.apk"
           generate_release_notes: true
           draft: false
         env:

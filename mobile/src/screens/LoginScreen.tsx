@@ -105,8 +105,7 @@ export function LoginScreen({ onLoggedIn }: Props) {
         </View>
       ) : null}
       <View style={styles.footer}>
-        <Text style={styles.footerText}>登录成功后将自动进入应用</Text>
-        <TouchableOpacity onPress={onLoggedIn}>
+        <TouchableOpacity onPress={onLoggedIn} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}>
           <Text style={styles.enterLink}>已登录，直接进入</Text>
         </TouchableOpacity>
       </View>
@@ -159,13 +158,9 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { color: '#fff', fontWeight: '600' },
   footer: {
-    padding: 16,
-    paddingBottom: 24,
-    backgroundColor: 'rgba(30,41,59,0.95)',
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
+    paddingVertical: 12,
+    paddingBottom: 12,
     alignItems: 'center',
   },
-  footerText: { color: '#94a3b8', fontSize: 13, marginBottom: 8 },
-  enterLink: { color: '#a78bfa', fontSize: 14, fontWeight: '500' },
+  enterLink: { color: '#94a3b8', fontSize: 13 },
 });

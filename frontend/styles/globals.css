@@ -1180,28 +1180,28 @@ h3.portfolio-section-title,
   }
 }
 
-/* App 内嵌（WebView）：隐藏 Web 侧边栏，由原生底部栏导航，并预留底部栏空间 */
-body.lanfund-app .sidebar-nav {
+/* App 内嵌（WebView / morefund-app）：隐藏 Web 侧边栏，由原生底部栏导航，并预留底部栏空间 */
+body.morefund-app .sidebar-nav {
   display: none !important;
 }
-body.lanfund-app .main-container {
+body.morefund-app .main-container {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
-body.lanfund-app .content-area {
+body.morefund-app .content-area {
   width: 100%;
 }
 
 /* App / 移动端：板块弹窗适配（底部抽屉式、安全区、大触控区） */
-body.lanfund-app .sector-modal,
-body.lanfund-app .confirm-dialog {
+body.morefund-app .sector-modal,
+body.morefund-app .confirm-dialog {
   padding-left: env(safe-area-inset-left, 0);
   padding-right: env(safe-area-inset-right, 0);
   padding-bottom: env(safe-area-inset-bottom, 0);
   align-items: flex-end;
   justify-content: flex-end;
 }
-body.lanfund-app .sector-modal-content,
-body.lanfund-app .confirm-dialog-content {
+body.morefund-app .sector-modal-content,
+body.morefund-app .confirm-dialog-content {
   width: 100%;
   max-width: 100%;
   max-height: 88vh;
@@ -1212,7 +1212,7 @@ body.lanfund-app .confirm-dialog-content {
   -webkit-overflow-scrolling: touch;
   overflow-y: auto;
 }
-body.lanfund-app .sector-modal-header {
+body.morefund-app .sector-modal-header {
   font-size: var(--font-size-lg);
   margin-bottom: 12px;
   padding-right: 36px;
@@ -1221,8 +1221,8 @@ body.lanfund-app .sector-modal-header {
   align-items: center;
   justify-content: space-between;
 }
-body.lanfund-app .sector-modal-header button[aria-label="关闭"],
-body.lanfund-app .sector-modal-header .sector-modal-close {
+body.morefund-app .sector-modal-header button[aria-label="关闭"],
+body.morefund-app .sector-modal-header .sector-modal-close {
   min-width: 44px;
   min-height: 44px;
   margin: -8px;
@@ -1233,45 +1233,45 @@ body.lanfund-app .sector-modal-header .sector-modal-close {
   font-size: 1.5rem;
   color: var(--text-dim);
 }
-body.lanfund-app .sector-modal-search {
+body.morefund-app .sector-modal-search {
   font-size: 16px;
   padding: 12px 14px;
   min-height: 48px;
   margin-bottom: 12px;
 }
-body.lanfund-app .sector-modal-footer {
+body.morefund-app .sector-modal-footer {
   gap: 12px;
   margin-top: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
 }
-body.lanfund-app .sector-modal-footer .btn {
+body.morefund-app .sector-modal-footer .btn {
   min-height: 44px;
   padding: 12px 20px;
   font-size: var(--font-size-md);
   flex: 1;
 }
-body.lanfund-app .sector-modal .table-container {
+body.morefund-app .sector-modal .table-container {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 0 -8px 8px;
 }
-body.lanfund-app .sector-modal .style-table {
+body.morefund-app .sector-modal .style-table {
   font-size: var(--font-size-sm);
   min-width: 480px;
 }
-body.lanfund-app .sector-modal .style-table th,
-body.lanfund-app .sector-modal .style-table td {
+body.morefund-app .sector-modal .style-table th,
+body.morefund-app .sector-modal .style-table td {
   padding: 10px 8px;
 }
-body.lanfund-app .sector-modal .style-table .btn {
+body.morefund-app .sector-modal .style-table .btn {
   min-height: 36px;
   padding: 8px 12px;
 }
-body.lanfund-app .sector-modal-two-col {
+body.morefund-app .sector-modal-two-col {
   flex-direction: column !important;
 }
-body.lanfund-app .sector-modal-two-col .sector-modal-two-col-side {
+body.morefund-app .sector-modal-two-col .sector-modal-two-col-side {
   width: 100% !important;
   border-left: none !important;
   border-top: 1px solid var(--border);

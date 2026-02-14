@@ -1,34 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
+import type { WebViewNavigation } from 'react-native-webview';
 import { useServerUrl } from '../context/ServerUrlContext';
 import { WEB_BASE_URL } from '../config';
 
 type Props = {
   path: string;
+  onNavigateToLogin?: () => void;
 };
 
-export function WebViewScreen({ path }: Props) {
+function isLoginUrl(url: string): boolean {
+  try {
+    if (!url || url === 'about:blank' || url.startsWith('about:')) return false;
+    const path = new URL(url).pathname;
+    return path === '/login' || path === '/login/';
+  } catch {
+    return false;
+  }
+}
+
+export function WebViewScreen({ path, onNavigateToLogin }: Props) {
   const { serverUrl } = useServerUrl();
   const base = serverUrl || WEB_BASE_URL || 'http://10.0.2.2:3000';
   const uri = `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : '/' + path}`;
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true); // 用于 onLoadEnd 后隐藏 loading
+  const [loading, setLoading] = useState(true);
+  const hasNavigatedToLogin = useRef(false);
 
-  // 注入脚本：为 body 添加 lanfund-app，触发前端 CSS 隐藏横向侧边栏、预留底部栏空间
+  const handleNavigationStateChange = (nav: WebViewNavigation) => {
+    const url = nav.url || '';
+    if (!isLoginUrl(url) || !onNavigateToLogin || hasNavigatedToLogin.current) return;
+    hasNavigatedToLogin.current = true;
+    onNavigateToLogin();
+  };
+
+  // 注入脚本：为 body 添加 morefund-app，触发前端 CSS 隐藏横向侧边栏、预留底部栏空间
   const injectHideSidebar = `
     (function() {
-      function addClass() { if (document.body) document.body.classList.add('lanfund-app'); }
+      function addClass() { if (document.body) document.body.classList.add('morefund-app'); }
       if (document.body) addClass(); else document.addEventListener('DOMContentLoaded', addClass);
     })();
     true;
   `;
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, styles.container]}>
       <WebView
         source={{ uri }}
         style={styles.webview}
+        scrollEnabled={true}
         injectedJavaScriptBeforeContentLoaded={injectHideSidebar}
         startInLoadingState
         onLoadStart={() => { setError(null); setLoading(true); }}
@@ -44,6 +65,7 @@ export function WebViewScreen({ path }: Props) {
             setLoading(false);
           }
         }}
+        onNavigationStateChange={handleNavigationStateChange}
         renderLoading={() => (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color="#7c3aed" />
@@ -74,9 +96,12 @@ export function WebViewScreen({ path }: Props) {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#1a1a2e',
+  },
   webview: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#1a1a2e',
   },
   loading: {
     position: 'absolute',

@@ -1,4 +1,4 @@
-# LanFund 安卓 App（React Native）
+# MoreFund 安卓 App（React Native）
 
 基于前端页面的 Android 应用，底部导航仅保留：**持仓基金**、**贵金属行情**、**行业板块**、**用户管理** 四个功能。内容通过 WebView 加载前端对应页面。
 
@@ -54,6 +54,8 @@ EXPO_PUBLIC_WEB_URL=http://你的电脑IP:3000 npx expo start
 
 ## 打包 APK
 
+应用名称为 **MoreFund**，包名为 `com.morefund.mobile`。图标使用 `assets/icon.png`（1024×1024），Expo 会生成各分辨率及自适应图标。
+
 在项目根目录执行（已支持 Windows / macOS / Linux）：
 
 ```bash
@@ -67,6 +69,8 @@ node scripts/build-apk.js
 ```
 
 APK 输出在 `mobile/android/app/build/outputs/apk/release/app-release.apk`。
+
+**若刚将项目更名为 MoreFund**：请先执行一次 `npx expo prebuild --platform android --clean`（或直接运行 `npm run mobile:build:apk`，脚本在无 `android` 目录时会自动带 `--clean`），以按新包名 `com.morefund.mobile` 生成工程。
 
 **本地环境要求**（JDK 17、Android SDK 等）见 [构建手机APK本地环境](../docs/构建手机APK本地环境.md)。
 
