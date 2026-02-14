@@ -37,7 +37,8 @@ RUN mkdir -p /app/cache /app/tmp /app/data /app/data/sessions && \
     chown -R nodejs:nodejs /app/cache /app/tmp /app/data && \
     chmod -R 755 /app/tmp
 
-ENV NODE_ENV=production PORT=8311
+# 持久化：数据库与会话默认写入 /app/data，需挂载 volume 保留基金列表等数据
+ENV NODE_ENV=production PORT=8311 DB_PATH=/app/data/fund_data.db
 EXPOSE 8311
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

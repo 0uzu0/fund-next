@@ -1,10 +1,23 @@
 /**
  * SQLite 数据库层（sql.js，无需本地编译），与 Python Database 表结构一致
+ * Docker 部署时请设置 DB_PATH=/app/data/fund_data.db 并挂载 volume 到 /app/data 以持久化基金列表等数据
  */
 const path = require('path');
 const fs = require('fs');
 
-const defaultDbPath = path.resolve(__dirname, process.env.DB_PATH || '../cache/fund_data.db');
+function getDefaultDbPath() {
+  const envPath = process.env.DB_PATH;
+  if (envPath) {
+    return path.isAbsolute(envPath) ? envPath : path.resolve(__dirname, envPath);
+  }
+  // 生产环境（如 Docker）默认使用 /app/data，便于挂载 volume 持久化
+  if (process.env.NODE_ENV === 'production') {
+    return '/app/data/fund_data.db';
+  }
+  return path.resolve(__dirname, '../cache/fund_data.db');
+}
+
+const defaultDbPath = getDefaultDbPath();
 const dbDir = path.dirname(defaultDbPath);
 if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });

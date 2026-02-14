@@ -1,5 +1,6 @@
 # LanFund 服务端 Docker Compose
 # 使用前在 .env 中设置 DOCKER_IMAGE 与 SESSION_SECRET（见 .env.example）
+# 持久化：fund-data 卷必须保留，否则重启后基金列表、用户数据等会丢失
 version: '3.8'
 
 services:
@@ -17,7 +18,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?请设置 .env 中的 SESSION_SECRET}
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
-      - fund-data:/app/data
+      - fund-data:/app/data   # 持久化：数据库 fund_data.db、会话等
       - backend-cache:/app/cache
       - /etc/localtime:/etc/localtime:ro
     healthcheck:
@@ -28,5 +29,5 @@ services:
       retries: 3
 
 volumes:
-  fund-data:
+  fund-data:    # 勿删：存储 fund_data.db（基金列表、用户、组合等）及 sessions
   backend-cache:

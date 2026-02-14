@@ -231,6 +231,8 @@ docker-compose logs -f
 docker-compose down
 ```
 
+**持久化**：基金列表、用户与组合等数据保存在 Docker 卷 `fund-data`（对应容器内 `/app/data`）。请勿删除该卷或使用 `docker-compose down -v`，否则数据会丢失。
+
 ### 本地构建并运行
 
 不依赖 Action 镜像、在本地从源码构建并运行：

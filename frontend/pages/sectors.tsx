@@ -59,6 +59,8 @@ function Sectors() {
   const [addToGroupLoading, setAddToGroupLoading] = useState(false);
   const [addSuccessMessage, setAddSuccessMessage] = useState<string | null>(null);
   const [sectorFundsSort, setSectorFundsSort] = useState<{ col: 'day_growth'; dir: 'asc' | 'desc' } | null>(null);
+  // 行业板块表排序：从第二列起（1=今日涨跌幅 2=主力净流入 3=主力净流入占比 4=小单净流入 5=小单流入占比）
+  const [sectorsSort, setSectorsSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
 
   useEffect(() => {
     // 使用 API 客户端，带缓存
@@ -161,6 +163,56 @@ function Sectors() {
       loadSectorList();
     }
   };
+
+  /** 解析板块表可排序列的数值（用于排序） */
+  const getSectorSortValue = useCallback((row: SectorRow, col: number): number => {
+    const s = (v: string) => String(v ?? '').trim();
+    switch (col) {
+      case 1: {
+        const m = s(row.change).replace(/%/g, '').match(/-?[\d.]+/);
+        return m ? parseFloat(m[0]) : -999;
+      }
+      case 2: {
+        const raw = s(row.main_inflow).replace(/[亿万]/g, '');
+        const m = raw.match(/-?[\d.]+/);
+        if (!m) return -999;
+        const num = parseFloat(m[0]);
+        if (s(row.main_inflow).includes('万') && !s(row.main_inflow).includes('亿')) return num / 10000;
+        return num;
+      }
+      case 3: {
+        const m = s(row.main_inflow_pct).replace(/%/g, '').match(/-?[\d.]+/);
+        return m ? parseFloat(m[0]) : -999;
+      }
+      case 4: {
+        const raw = s(row.small_inflow).replace(/[亿万]/g, '');
+        const m = raw.match(/-?[\d.]+/);
+        if (!m) return -999;
+        const num = parseFloat(m[0]);
+        if (s(row.small_inflow).includes('万') && !s(row.small_inflow).includes('亿')) return num / 10000;
+        return num;
+      }
+      case 5: {
+        const m = s(row.small_inflow_pct).replace(/%/g, '').match(/-?[\d.]+/);
+        return m ? parseFloat(m[0]) : -999;
+      }
+      default:
+        return 0;
+    }
+  }, []);
+
+  const sortedSectorsData = useMemo(() => {
+    if (!sectorsSort) return sectorsData;
+    const list = [...sectorsData];
+    const { col, dir } = sectorsSort;
+    list.sort((a, b) => {
+      const va = getSectorSortValue(a, col);
+      const vb = getSectorSortValue(b, col);
+      const cmp = va - vb;
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [sectorsData, sectorsSort, getSectorSortValue]);
 
   const sectorListIndex = (name: string) => {
     const i = sectorList.indexOf(name);
@@ -288,15 +340,45 @@ function Sectors() {
                       <thead>
                         <tr>
                           <th>板块名称</th>
-                          <th>今日涨跌幅</th>
-                          <th>今日主力净流入</th>
-                          <th>今日主力净流入占比</th>
-                          <th>今日小单净流入</th>
-                          <th>今日小单流入占比</th>
+                          <th
+                            className="sortable"
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setSectorsSort((prev) => (prev?.col === 1 ? (prev.dir === 'desc' ? null : { col: 1, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 1, dir: 'desc' }))}
+                          >
+                            今日涨跌幅{sectorsSort?.col === 1 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                          </th>
+                          <th
+                            className="sortable"
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setSectorsSort((prev) => (prev?.col === 2 ? (prev.dir === 'desc' ? null : { col: 2, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 2, dir: 'desc' }))}
+                          >
+                            今日主力净流入{sectorsSort?.col === 2 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                          </th>
+                          <th
+                            className="sortable"
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setSectorsSort((prev) => (prev?.col === 3 ? (prev.dir === 'desc' ? null : { col: 3, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 3, dir: 'desc' }))}
+                          >
+                            今日主力净流入占比{sectorsSort?.col === 3 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                          </th>
+                          <th
+                            className="sortable"
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setSectorsSort((prev) => (prev?.col === 4 ? (prev.dir === 'desc' ? null : { col: 4, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 4, dir: 'desc' }))}
+                          >
+                            今日小单净流入{sectorsSort?.col === 4 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                          </th>
+                          <th
+                            className="sortable"
+                            style={{ cursor: 'pointer', userSelect: 'none' }}
+                            onClick={() => setSectorsSort((prev) => (prev?.col === 5 ? (prev.dir === 'desc' ? null : { col: 5, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 5, dir: 'desc' }))}
+                          >
+                            今日小单流入占比{sectorsSort?.col === 5 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sectorsData.map((row, i) => (
+                        {sortedSectorsData.map((row, i) => (
                           <tr key={i}>
                             <td>{row.name}</td>
                             <td className={String(row.change).startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{row.change}</td>

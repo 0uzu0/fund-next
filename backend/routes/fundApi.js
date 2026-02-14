@@ -242,11 +242,16 @@ router.post('/api/fund/upload', loginRequired, upload.single('file'), (req, res)
     const defaultGroup = db.prepare(
       'SELECT id FROM fund_groups WHERE user_id = ? AND sort_order = 0 LIMIT 1'
     ).get(userId);
+    const codes = Object.keys(fundMap);
     if (defaultGroup) {
-      const codes = Object.keys(fundMap);
       db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?').run(JSON.stringify(codes), defaultGroup.id);
     }
-    res.json({ success: true, message: `成功导入${Object.keys(fundMap).length}个基金` });
+    // 导入后设置第一个基金为默认图表基金，避免自选默认基金无数据
+    if (codes.length > 0) {
+      db.prepare('UPDATE user_funds SET chart_default = 0 WHERE user_id = ?').run(userId);
+      db.prepare('UPDATE user_funds SET chart_default = 1 WHERE user_id = ? AND fund_code = ?').run(userId, codes[0]);
+    }
+    res.json({ success: true, message: `成功导入${codes.length}个基金` });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message || '上传失败' });
   }
@@ -727,12 +732,24 @@ router.get('/api/portfolio/fund-list', loginRequired, (req, res) => {
     for (const g of groups) {
       (g.fund_codes ? JSON.parse(g.fund_codes) : []).forEach(c => codes.add(c));
     }
+    const rows = db.prepare('SELECT fund_code, fund_name, chart_default FROM user_funds WHERE user_id = ?').all(userId);
     const fundMap = {};
-    const rows = db.prepare('SELECT fund_code, fund_name FROM user_funds WHERE user_id = ?').all(userId);
+    const defaultByCode = {};
     for (const r of rows) {
-      if (codes.has(r.fund_code)) fundMap[r.fund_code] = r.fund_name || `基金${r.fund_code}`;
+      if (codes.has(r.fund_code)) {
+        fundMap[r.fund_code] = r.fund_name || `基金${r.fund_code}`;
+        defaultByCode[r.fund_code] = r.chart_default ? 1 : 0;
+      }
     }
-    const funds = [...codes].sort().map(code => ({ code, name: fundMap[code] || `基金${code}` }));
+    // 默认图表基金排第一，其余按代码排序，使自选默认基金与图表一致
+    const funds = [...codes]
+      .sort((a, b) => {
+        const da = defaultByCode[a] || 0;
+        const dbVal = defaultByCode[b] || 0;
+        if (dbVal !== da) return dbVal - da;
+        return String(a).localeCompare(String(b));
+      })
+      .map(code => ({ code, name: fundMap[code] || `基金${code}` }));
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.json({ success: true, funds });
   } catch (e) {
@@ -760,14 +777,14 @@ router.get('/api/fund/chart-data/preload', loginRequired, async (req, res) => {
     const userId = getCurrentUserId(req);
     const today = new Date().toISOString().slice(0, 10);
     
-    // 获取用户所有持仓基金（holding_units > 0）
+    // 获取用户所有基金（含自选，不限于持仓），使导入后自选默认基金也有图表数据
     const holdingFunds = db.prepare(
       `SELECT DISTINCT fund_code, fund_key, fund_name 
        FROM user_funds 
-       WHERE user_id = ? AND holding_units > 0`
+       WHERE user_id = ?`
     ).all(userId);
     
-    console.log(`[预加载API] 用户 ${userId} 有 ${holdingFunds.length} 只持仓基金`);
+    console.log(`[预加载API] 用户 ${userId} 有 ${holdingFunds.length} 只基金（含自选）`);
     
     if (holdingFunds.length === 0) {
       return res.json({
