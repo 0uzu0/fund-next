@@ -12,7 +12,7 @@ type WatchlistSectionProps = {
   totalCount: number;
   isEmpty: boolean;
   sort: WatchlistSortState;
-  onSortChange: (col: number, dir: 'asc' | 'desc' | null) => void;
+  onSortClick: (col: number) => void;
   pageSize: 10 | 20 | 30;
   page: number;
   totalPages: number;
@@ -55,7 +55,7 @@ export default function WatchlistSection({
   totalCount,
   isEmpty,
   sort,
-  onSortChange,
+  onSortClick,
   pageSize,
   page,
   totalPages,
@@ -80,13 +80,6 @@ export default function WatchlistSection({
   dataSource,
 }: WatchlistSectionProps) {
   const tiantianNoDataTitle = dataSource === 'tiantian' ? '天天基金不提供该数据，可切换 Fund123 查看' : undefined;
-  const handleSort = (col: number) => {
-    const nextDir = sort?.col === col
-      ? (sort.dir === 'asc' ? 'desc' : null)
-      : 'asc';
-    onSortChange(col, nextDir);
-  };
-
   const isDefaultGroup = selectedGroupId !== null && defaultGroupId !== null && selectedGroupId === defaultGroupId;
 
   return (
@@ -194,8 +187,10 @@ export default function WatchlistSection({
               {COLS.map(({ key, label }) => (
                 <th
                   key={key}
+                  role="columnheader"
+                  aria-sort={sort?.col === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className={`sortable ${sort?.col === key ? (sort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}`}
-                  onClick={() => handleSort(key)}
+                  onClick={() => onSortClick(key)}
                 >
                   {label}
                 </th>

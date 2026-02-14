@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { API_BASE } from '../utils/apiClient';
-
-function getApiBase(): string {
-  if (API_BASE) return API_BASE;
-  if (typeof window !== 'undefined') return window.location.origin;
-  return '';
-}
+import { getApiBase, apiGet, apiPost } from '../utils/apiClient';
 
 export default function Login() {
   const router = useRouter();
@@ -18,8 +12,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch(getApiBase() + '/api/auth/me', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+    apiGet<{ username?: string }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
       .then(() => {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
         router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
@@ -32,18 +25,15 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(getApiBase() + '/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ username: username.trim(), password, remember_me: rememberMe }),
-      });
-      const data = await res.json();
+      const data = await apiPost<{ success?: boolean; message?: string }>(
+        getApiBase() + '/api/auth/login',
+        { username: username.trim(), password, remember_me: rememberMe }
+      );
       if (data.success) {
         const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
         router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
       }
-      else setError(data.message || '登录失败');
+      else setError((data as { message?: string }).message || '登录失败');
     } catch (err) {
       setError('网络错误');
     } finally {

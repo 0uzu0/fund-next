@@ -1,12 +1,12 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { getApiBase, apiGet } from '../utils/apiClient';
 
 export default function Index() {
   const router = useRouter();
   useEffect(() => {
-    const api = process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${api}/api/auth/me`, { credentials: 'include' })
-      .then((r) => (r.ok ? router.replace('/portfolio') : router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/portfolio'))))
+    apiGet<{ username?: string }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
+      .then(() => router.replace('/portfolio'))
       .catch(() => router.replace('/login?redirect=' + encodeURIComponent(router.asPath || '/portfolio')));
   }, [router]);
   return (

@@ -1,4 +1,5 @@
 import type { FundRow } from '../../types/portfolio';
+import Modal from '../Modal';
 
 type EditHoldingModalProps = {
   row: FundRow | null;
@@ -23,12 +24,22 @@ export default function EditHoldingModal({
   loading,
   onSave,
 }: EditHoldingModalProps) {
-  if (!row) return null;
-
   return (
-    <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !loading && onClose()}>
-      <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-        <div className="sector-modal-header">修改持仓金额</div>
+    <Modal
+      open={!!row}
+      onClose={onClose}
+      title="修改持仓金额"
+      maxWidth={400}
+      closeOnBackdrop={!loading}
+      closeDisabled={loading}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>取消</button>
+          <button type="button" className="btn btn-primary" onClick={onSave} disabled={loading}>{loading ? '保存中…' : '保存'}</button>
+        </>
+      }
+    >
+      {row && (
         <div style={{ padding: '16px 0' }}>
           <p style={{ margin: '0 0 12px', color: 'var(--text-dim)', fontSize: 'var(--font-size-xs)' }}>
             {row.code} - {row.name}
@@ -57,11 +68,7 @@ export default function EditHoldingModal({
           />
           {error && <p style={{ margin: '12px 0 0', color: 'var(--gh-danger-fg)', fontSize: 'var(--font-size-xs)' }}>{error}</p>}
         </div>
-        <div className="sector-modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>取消</button>
-          <button type="button" className="btn btn-primary" onClick={onSave} disabled={loading}>{loading ? '保存中…' : '保存'}</button>
-        </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   );
 }

@@ -6,6 +6,13 @@
 /** 后端 API 根地址，供页面与 hooks 复用 */
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
+/** 获取请求用的 API 根地址（无配置时用当前页 origin） */
+export function getApiBase(): string {
+  if (API_BASE) return API_BASE;
+  if (typeof window !== 'undefined') return window.location.origin;
+  return '';
+}
+
 // 请求缓存配置
 interface CacheConfig {
   ttl?: number; // 缓存时间（毫秒）
@@ -247,7 +254,7 @@ export function apiDelete<T = any>(
 }
 
 /**
- * 清除指定缓存
+ * 清除缓存：不传 pattern 时清空全部；传 pattern 时仅删除 key 包含该字符串的项
  */
 export function clearCache(pattern?: string): void {
   if (!pattern) {
@@ -262,12 +269,4 @@ export function clearCache(pattern?: string): void {
     }
   });
   keysToDelete.forEach(key => memoryCache.delete(key));
-}
-
-/**
- * 清除所有缓存
- */
-export function clearAllCache(): void {
-  memoryCache.clear();
-  pendingRequests.clear();
 }

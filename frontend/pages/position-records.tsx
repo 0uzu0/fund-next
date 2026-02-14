@@ -1,14 +1,8 @@
 import { useEffect, useState, useCallback, memo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { apiGet, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
-
-/** 与 apiClient 一致：有配置用配置，否则浏览器端用当前 origin（前后端同机部署时生效），避免 Failed to fetch */
-function getApiBase(): string {
-  if (API_BASE) return API_BASE;
-  if (typeof window !== 'undefined') return window.location.origin;
-  return '';
-}
+import { apiGet, apiDelete, clearCache, getApiBase } from '../utils/apiClient';
+import { toast } from '../utils/toast';
 
 type PositionRecord = {
   id: number;
@@ -109,10 +103,10 @@ function PositionRecords() {
           // 清除缓存并重新获取
           fetchRecords();
         } else {
-          alert(res.message || '撤销失败');
+          toast.error(res.message || '撤销失败');
         }
       })
-      .catch((e) => alert('请求失败: ' + (e.message || e)))
+      .catch((e) => toast.error('请求失败: ' + (e.message || e)))
       .finally(() => setUndoingId(null));
   }, [fetchRecords]);
 

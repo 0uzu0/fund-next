@@ -28,6 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check lock files
+        run: |
+          test -f backend/package-lock.json || (echo "::error::backend/package-lock.json 缺失，请提交该文件以保证线上构建一致" && exit 1)
+          test -f frontend/package-lock.json || (echo "::error::frontend/package-lock.json 缺失，请提交该文件以保证线上构建一致" && exit 1)
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18.x'
@@ -35,18 +40,20 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: backend/node_modules
-          key: backend-${{ hashFiles('backend/package-lock.json') }}
+          key: backend-${{ runner.os }}-node18-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: backend-${{ runner.os }}-node18-
 
       - uses: actions/cache@v4
         with:
           path: frontend/node_modules
-          key: frontend-${{ hashFiles('frontend/package-lock.json') }}
+          key: frontend-${{ runner.os }}-node18-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: frontend-${{ runner.os }}-node18-
 
       - name: Install backend dependencies
-        run: cd backend && npm ci
+        run: cd backend && npm ci --no-audit --no-fund
 
       - name: Install frontend dependencies
-        run: cd frontend && npm ci
+        run: cd frontend && npm ci --no-audit --no-fund
 
       - name: Check TypeScript
         run: cd frontend && npx tsc --noEmit || true
@@ -86,3 +93,5 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+        env:
+          DOCKER_BUILDKIT: 1

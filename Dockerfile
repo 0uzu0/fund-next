@@ -1,20 +1,22 @@
 # LanFund 服务端：多阶段构建（前端 + 后端），构建上下文为仓库根目录
-# 阶段1: 构建前端
+# 阶段1: 构建前端（要求提交 package-lock.json 以保证线上构建一致）
 FROM node:18-alpine AS frontend-builder
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY frontend/package.json frontend/package-lock.json ./
+# 使用 BuildKit 缓存 npm 目录，加速 Actions 重复构建
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --no-audit --no-fund
 COPY frontend/ .
 ENV NEXT_PUBLIC_API_URL=
 ENV NODE_ENV=production
 RUN npm run build
 
-# 阶段2: 后端依赖与产物
+# 阶段2: 后端依赖与产物（仅生产依赖，npm 8+ 使用 --omit=dev）
 FROM node:18-alpine AS backend-builder
 WORKDIR /app
-COPY backend/package.json backend/package-lock.json* ./
-RUN npm ci --only=production --no-audit --no-fund || \
-    (echo "npm ci failed, falling back to npm install" && npm install --only=production --no-audit --no-fund)
+COPY backend/package.json backend/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --no-audit --no-fund
 COPY backend/ .
 COPY --from=frontend-builder /app/frontend/out ./frontend/out
 COPY --from=frontend-builder /app/frontend/public ./frontend/public

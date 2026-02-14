@@ -45,7 +45,9 @@ build/
 
 # Dependencies (installed in container; keep package-lock.json for reproducible build)
 node_modules/
+**/node_modules/
 yarn.lock
+pnpm-lock.yaml
 
 # OS
 .DS_Store

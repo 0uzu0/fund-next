@@ -9,7 +9,7 @@ type HoldingTableProps = {
   totalCount: number;
   isEmpty: boolean;
   sort: HoldingSortState;
-  onSortChange: (col: number, dir: 'asc' | 'desc' | null) => void; // dir=null 表示取消排序
+  onSortClick: (col: number) => void;
   pageSize: 10 | 20 | 30;
   page: number;
   totalPages: number;
@@ -35,7 +35,7 @@ export default function HoldingTable({
   totalCount,
   isEmpty,
   sort,
-  onSortChange,
+  onSortClick,
   pageSize,
   page,
   totalPages,
@@ -46,13 +46,6 @@ export default function HoldingTable({
   onAddPosition,
   onReducePosition,
 }: HoldingTableProps) {
-  const handleSort = (col: number) => {
-    const nextDir = sort?.col === col
-      ? (sort.dir === 'asc' ? 'desc' : null)
-      : 'asc';
-    onSortChange(col, nextDir);
-  };
-
   return (
     <div>
       <h3 className="portfolio-section-title" data-section-title="small" style={{ margin: '0 0 16px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--font-size-lg)' }}>
@@ -67,8 +60,10 @@ export default function HoldingTable({
               {COLS.map(({ key, label }) => (
                 <th
                   key={key}
+                  role="columnheader"
+                  aria-sort={sort?.col === key ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                   className={`sortable ${sort?.col === key ? (sort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}`}
-                  onClick={() => handleSort(key)}
+                  onClick={() => onSortClick(key)}
                 >
                   {label}
                 </th>

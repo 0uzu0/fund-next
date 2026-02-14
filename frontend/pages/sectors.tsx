@@ -2,6 +2,8 @@ import { useEffect, useState, memo, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { apiGet, apiPost, clearCache } from '../utils/apiClient';
+import { toast } from '../utils/toast';
+import { useTableSort } from '../hooks/useTableSort';
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -57,10 +59,8 @@ function Sectors() {
   const [showAddToGroupModal, setShowAddToGroupModal] = useState(false);
   const [selectedFundCode, setSelectedFundCode] = useState<string | null>(null);
   const [addToGroupLoading, setAddToGroupLoading] = useState(false);
-  const [addSuccessMessage, setAddSuccessMessage] = useState<string | null>(null);
-  const [sectorFundsSort, setSectorFundsSort] = useState<{ col: 'day_growth'; dir: 'asc' | 'desc' } | null>(null);
-  // 行业板块表排序：从第二列起（1=今日涨跌幅 2=主力净流入 3=主力净流入占比 4=小单净流入 5=小单流入占比）
-  const [sectorsSort, setSectorsSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
+  const { sort: sectorsSort, handleSort: handleSectorsSort } = useTableSort();
+  const { sort: sectorFundsSort, handleSort: onSectorFundsSortClick } = useTableSort();
 
   useEffect(() => {
     // 使用 API 客户端，带缓存
@@ -226,7 +226,6 @@ function Sectors() {
 
   const handleAddToWatchlist = (fundCode: string) => {
     setSelectedFundCode(fundCode);
-    setAddSuccessMessage(null);
     setShowAddToGroupModal(true);
     loadGroups();
   };
@@ -234,15 +233,11 @@ function Sectors() {
   const handleConfirmAddToGroup = async (groupId: number) => {
     if (!selectedFundCode) return;
     setAddToGroupLoading(true);
-    setAddSuccessMessage(null);
     try {
-      const r = await fetch(`${apiBase}/api/fund/groups/${groupId}/funds`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ code: selectedFundCode }),
-      });
-      const d = await r.json();
+      const d = await apiPost<{ success?: boolean; message?: string }>(
+        `${apiBase}/api/fund/groups/${groupId}/funds`,
+        { code: selectedFundCode }
+      );
       if (d.success) {
         const group = groups.find((g) => g.id === groupId);
         const groupName = group?.name || '未知';
@@ -253,12 +248,12 @@ function Sectors() {
               : g
           )
         );
-        setAddSuccessMessage(`已添加至「${groupName}」`);
+        toast.success(`已添加至「${groupName}」`);
       } else {
-        alert(d.message || '添加失败');
+        toast.error(d.message || '添加失败');
       }
     } catch (e) {
-      alert('网络错误：' + (e as Error).message);
+      toast.error('网络错误：' + (e as Error).message);
     } finally {
       setAddToGroupLoading(false);
     }
@@ -272,7 +267,7 @@ function Sectors() {
 
   const sortedSectorFunds = useMemo(() => {
     const list = [...sectorFunds];
-    if (!sectorFundsSort || sectorFundsSort.col !== 'day_growth') return list;
+    if (!sectorFundsSort || sectorFundsSort.col !== 0) return list;
     list.sort((a, b) => {
       const va = parseDayGrowth(a.day_growth);
       const vb = parseDayGrowth(b.day_growth);
@@ -340,41 +335,23 @@ function Sectors() {
                       <thead>
                         <tr>
                           <th>板块名称</th>
-                          <th
-                            className="sortable"
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                            onClick={() => setSectorsSort((prev) => (prev?.col === 1 ? (prev.dir === 'desc' ? null : { col: 1, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 1, dir: 'desc' }))}
-                          >
-                            今日涨跌幅{sectorsSort?.col === 1 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
-                          </th>
-                          <th
-                            className="sortable"
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                            onClick={() => setSectorsSort((prev) => (prev?.col === 2 ? (prev.dir === 'desc' ? null : { col: 2, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 2, dir: 'desc' }))}
-                          >
-                            今日主力净流入{sectorsSort?.col === 2 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
-                          </th>
-                          <th
-                            className="sortable"
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                            onClick={() => setSectorsSort((prev) => (prev?.col === 3 ? (prev.dir === 'desc' ? null : { col: 3, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 3, dir: 'desc' }))}
-                          >
-                            今日主力净流入占比{sectorsSort?.col === 3 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
-                          </th>
-                          <th
-                            className="sortable"
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                            onClick={() => setSectorsSort((prev) => (prev?.col === 4 ? (prev.dir === 'desc' ? null : { col: 4, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 4, dir: 'desc' }))}
-                          >
-                            今日小单净流入{sectorsSort?.col === 4 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
-                          </th>
-                          <th
-                            className="sortable"
-                            style={{ cursor: 'pointer', userSelect: 'none' }}
-                            onClick={() => setSectorsSort((prev) => (prev?.col === 5 ? (prev.dir === 'desc' ? null : { col: 5, dir: prev.dir === 'asc' ? 'desc' : 'asc' }) : { col: 5, dir: 'desc' }))}
-                          >
-                            今日小单流入占比{sectorsSort?.col === 5 && (sectorsSort.dir === 'asc' ? ' ↑' : ' ↓')}
-                          </th>
+                          {[
+                            [1, '今日涨跌幅'],
+                            [2, '今日主力净流入'],
+                            [3, '今日主力净流入占比'],
+                            [4, '今日小单净流入'],
+                            [5, '今日小单流入占比'],
+                          ].map(([col, label]) => (
+                            <th
+                              key={col}
+                              role="columnheader"
+                              aria-sort={sectorsSort?.col === col ? (sectorsSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                              className={`sortable ${sectorsSort?.col === col ? (sectorsSort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}`}
+                              onClick={() => handleSectorsSort(col as number)}
+                            >
+                              {label}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
@@ -497,12 +474,12 @@ function Sectors() {
                                 <th>基金名称</th>
                                 <th>净值</th>
                                 <th
-                                  className="sortable"
-                                  style={{ cursor: 'pointer', userSelect: 'none' }}
-                                  onClick={() => setSectorFundsSort((prev) => (prev?.dir === 'desc' ? null : { col: 'day_growth', dir: prev?.dir === 'asc' ? 'desc' : 'asc' }))}
+                                  role="columnheader"
+                                  aria-sort={sectorFundsSort?.col === 0 ? (sectorFundsSort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+                                  className={`sortable ${sectorFundsSort?.col === 0 ? (sectorFundsSort.dir === 'asc' ? 'sorted-asc' : 'sorted-desc') : ''}`}
+                                  onClick={() => onSectorFundsSortClick(0)}
                                 >
                                   日增长率
-                                  {sectorFundsSort?.col === 'day_growth' && (sectorFundsSort.dir === 'asc' ? ' ↑' : ' ↓')}
                                 </th>
                                 <th>操作</th>
                               </tr>
@@ -550,11 +527,6 @@ function Sectors() {
                 <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !addToGroupLoading && setShowAddToGroupModal(false)}>
                   <div className="sector-modal-content" style={{ maxWidth: 400, width: '95%' }} onClick={(e) => e.stopPropagation()}>
                     <div className="sector-modal-header">选择分组</div>
-                    {addSuccessMessage && (
-                      <p style={{ margin: '0 0 12px', padding: '8px 12px', background: 'var(--gh-bg-secondary)', borderRadius: 8, color: 'var(--accent)', fontSize: 'var(--font-size-sm)' }}>
-                        {addSuccessMessage}
-                      </p>
-                    )}
                     <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 16 }}>
                       {groups.length === 0 ? (
                         <p style={{ color: 'var(--text-dim)', textAlign: 'center', padding: 20 }}>暂无分组，请先创建分组</p>
@@ -592,7 +564,7 @@ function Sectors() {
                       )}
                     </div>
                     <div className="sector-modal-footer">
-                      <button type="button" className="btn btn-secondary" onClick={() => { setShowAddToGroupModal(false); setSelectedFundCode(null); setAddSuccessMessage(null); }} disabled={addToGroupLoading}>完成</button>
+                      <button type="button" className="btn btn-secondary" onClick={() => { setShowAddToGroupModal(false); setSelectedFundCode(null); }} disabled={addToGroupLoading}>完成</button>
                     </div>
                   </div>
                 </div>

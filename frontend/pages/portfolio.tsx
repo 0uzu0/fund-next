@@ -3,7 +3,9 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import { useChartData } from '../hooks/useChartData';
-import { apiGet, apiPost, apiPut, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
+import { useTableSort } from '../hooks/useTableSort';
+import { apiGet, apiPost, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
+import { toast } from '../utils/toast';
 import type { FundRow, Summary, Group, DataSourceOption } from '../types/portfolio';
 import { toNum, formatMoney, formatPct, formatYuan } from '../lib/format';
 import { SECTOR_CATEGORIES } from '../constants/portfolio';
@@ -128,9 +130,8 @@ export default function Portfolio() {
   const [deleteSelectedCodes, setDeleteSelectedCodes] = useState<string[]>([]);
   const [deleteSubmitLoading, setDeleteSubmitLoading] = useState(false);
   // 持有基金表排序：列索引 2~7（持仓金额到累计收益）
-  const [holdingSort, setHoldingSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
-  // 自选基金表排序：列索引 2~6（净值到近30天）
-  const [watchlistSort, setWatchlistSort] = useState<{ col: number; dir: 'asc' | 'desc' } | null>(null);
+  const { sort: holdingSort, handleSort: onHoldingSortClick } = useTableSort();
+  const { sort: watchlistSort, handleSort: onWatchlistSortClick } = useTableSort();
   // 持有基金分页：每页条数、当前页
   const [holdingPageSize, setHoldingPageSize] = useState<10 | 20 | 30>(10);
   const [holdingPage, setHoldingPage] = useState(1);
@@ -347,7 +348,7 @@ export default function Portfolio() {
       form.append('file', file);
       const r = await fetch(`${API}/api/fund/upload`, { method: 'POST', credentials: 'include', body: form });
       const d = await r.json();
-      alert(d.message || (d.success ? '导入成功' : '导入失败'));
+      (d.success ? toast.success : toast.error)(d.message || (d.success ? '导入成功' : '导入失败'));
       if (d.success) {
         clearCache();
         fetchData();
@@ -374,7 +375,7 @@ export default function Portfolio() {
       setSectorFundList(list);
       setShowSectorFundModal(true);
     } catch (e) {
-      alert('获取基金列表失败');
+      toast.error('获取基金列表失败');
     }
   };
 
@@ -391,13 +392,13 @@ export default function Portfolio() {
       setDeleteFundList(list);
       setShowDeleteFundModal(true);
     } catch (e) {
-      alert('获取基金列表失败');
+      toast.error('获取基金列表失败');
     }
   };
 
   const confirmDeleteFund = () => {
     if (deleteSelectedCodes.length === 0) {
-      alert('请至少选择一只基金');
+      toast.error('请至少选择一只基金');
       return;
     }
     if (!confirm(`确定要删除 ${deleteSelectedCodes.length} 只基金吗？`)) return;
@@ -410,7 +411,7 @@ export default function Portfolio() {
     })
       .then((res) => res.json())
       .then((d) => {
-        alert(d.message || (d.success ? '删除成功' : '删除失败'));
+        (d.success ? toast.success : toast.error)(d.message || (d.success ? '删除成功' : '删除失败'));
         if (d.success) {
           setShowDeleteFundModal(false);
           setDeleteSelectedCodes([]);
@@ -419,20 +420,20 @@ export default function Portfolio() {
           fetchWatchlist();
         }
       })
-      .catch(() => alert('删除失败'))
+      .catch(() => toast.error('删除失败'))
       .finally(() => setDeleteSubmitLoading(false));
   };
 
   const confirmSectorFundSelection = () => {
     if (sectorSelectedCodes.length === 0) {
-      alert('请至少选择一只基金');
+      toast.error('请至少选择一只基金');
       return;
     }
     if (sectorOp === 'remove') {
       setSectorSubmitLoading(true);
       apiPost<{ success: boolean; message?: string }>(`${API}/api/fund/sector/remove`, { codes: sectorSelectedCodes.join(',') })
         .then((d) => {
-          alert(d.message || (d.success ? '已删除板块标记' : '操作失败'));
+          (d.success ? toast.success : toast.error)(d.message || (d.success ? '已删除板块标记' : '操作失败'));
           if (d.success) {
             clearCache('api/fund/data');
             fetchData();
@@ -440,7 +441,7 @@ export default function Portfolio() {
             setSectorOp(null);
           }
         })
-        .catch(() => alert('操作失败'))
+        .catch(() => toast.error('操作失败'))
         .finally(() => setSectorSubmitLoading(false));
       return;
     }
@@ -450,7 +451,7 @@ export default function Portfolio() {
 
   const confirmSectorTagSelection = () => {
     if (sectorSelectedTags.length === 0) {
-      alert('请至少选择一个板块');
+      toast.error('请至少选择一个板块');
       return;
     }
     setSectorSubmitLoading(true);
@@ -459,7 +460,7 @@ export default function Portfolio() {
       sectors: sectorSelectedTags,
     })
       .then((d) => {
-        alert(d.message || (d.success ? '已标注板块' : '操作失败'));
+        (d.success ? toast.success : toast.error)(d.message || (d.success ? '已标注板块' : '操作失败'));
         if (d.success) {
           clearCache('api/fund/data');
           fetchData();
@@ -467,7 +468,7 @@ export default function Portfolio() {
           setSectorOp(null);
         }
       })
-      .catch(() => alert('操作失败'))
+      .catch(() => toast.error('操作失败'))
       .finally(() => setSectorSubmitLoading(false));
   };
 
@@ -522,10 +523,10 @@ export default function Portfolio() {
         fetchData();
         fetchWatchlist();
       } else {
-        alert(d.message || '移除失败');
+        toast.error(d.message || '移除失败');
       }
     } catch (e) {
-      alert('网络错误');
+      toast.error('网络错误');
     }
   };
 
@@ -568,7 +569,7 @@ export default function Portfolio() {
   const onCreateGroup = async () => {
     const name = newGroupName.trim();
     if (!name) {
-      alert('请输入分组名称');
+      toast.error('请输入分组名称');
       return;
     }
     setNewGroupLoading(true);
@@ -601,10 +602,10 @@ export default function Portfolio() {
         });
         fetchData();
       } else {
-        alert(d.message || '创建失败');
+        toast.error(d.message || '创建失败');
       }
     } catch (e) {
-      alert('网络错误');
+      toast.error('网络错误');
     } finally {
       setNewGroupLoading(false);
     }
@@ -645,11 +646,11 @@ export default function Portfolio() {
         fetchWatchlist();
         setDeletingGroupId(null);
       } else {
-        alert(d.message || '删除失败');
+        toast.error(d.message || '删除失败');
         setDeletingGroupId(null);
       }
     } catch (e) {
-      alert('网络错误');
+      toast.error('网络错误');
       setDeletingGroupId(null);
     }
   }
@@ -719,11 +720,11 @@ export default function Portfolio() {
     if (!addPositionRow) return;
     const amount = parseFloat(addPositionAmount);
     if (!(amount > 0)) {
-      alert('请填写已买入金额');
+      toast.error('请填写已买入金额');
       return;
     }
     if (!addPositionTime?.date) {
-      alert('请选择买入时间');
+      toast.error('请选择买入时间');
       return;
     }
     const buyDate = addPositionTime.date;
@@ -791,10 +792,10 @@ export default function Portfolio() {
         fetchData();
         fetchWatchlist();
       } else {
-        alert(d.message || '加仓失败');
+        toast.error(d.message || '加仓失败');
       }
     } catch (e) {
-      alert('加仓失败: ' + (e instanceof Error ? e.message : String(e)));
+      toast.error('加仓失败: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setAddPositionLoading(false);
     }
@@ -804,11 +805,11 @@ export default function Portfolio() {
     if (!reducePositionRow) return;
     const reduceUnits = parseFloat(reducePositionUnits);
     if (!(reduceUnits > 0)) {
-      alert('请填写同步减仓份额');
+      toast.error('请填写同步减仓份额');
       return;
     }
     if (!reducePositionTime?.date) {
-      alert('请选择卖出时间');
+      toast.error('请选择卖出时间');
       return;
     }
     const sellDate = reducePositionTime.date;
@@ -831,7 +832,7 @@ export default function Portfolio() {
     const oldUnits = toNum(reducePositionRow.holding_units);
     const oldCost = toNum(reducePositionRow.cost_per_unit) || 1;
     if (reduceUnits > oldUnits) {
-      alert('同步减仓份额不能大于当前持有份额');
+      toast.error('同步减仓份额不能大于当前持有份额');
       return;
     }
     let newUnitsRaw = Math.max(0, oldUnits - reduceUnits);
@@ -873,10 +874,10 @@ export default function Portfolio() {
         fetchData();
         fetchWatchlist();
       } else {
-        alert(d.message || '同步减仓失败');
+        toast.error(d.message || '同步减仓失败');
       }
     } catch (e) {
-      alert('同步减仓失败: ' + (e instanceof Error ? e.message : String(e)));
+      toast.error('同步减仓失败: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setReducePositionLoading(false);
     }
@@ -1006,7 +1007,7 @@ export default function Portfolio() {
     const raw = cumulativeCorrectionInput.trim();
     const val = raw === '' ? 0 : parseFloat(raw);
     if (!Number.isFinite(val)) {
-      alert('请输入有效的数字');
+      toast.error('请输入有效的数字');
       return;
     }
     setCumulativeCorrection(val);
@@ -1667,7 +1668,7 @@ export default function Portfolio() {
             totalCount={sortedHoldingRows.length}
             isEmpty={fundRows.length === 0}
             sort={holdingSort}
-            onSortChange={(col, dir) => { if (dir === null) setHoldingSort(null); else setHoldingSort({ col, dir }); }}
+            onSortClick={onHoldingSortClick}
             pageSize={holdingPageSize}
             page={holdingPageSafe}
             totalPages={holdingTotalPages}
@@ -1689,7 +1690,7 @@ export default function Portfolio() {
             totalCount={sortedWatchlistRows.length}
             isEmpty={watchlistRows.length === 0}
             sort={watchlistSort}
-            onSortChange={(col, dir) => { if (dir === null) setWatchlistSort(null); else setWatchlistSort({ col, dir }); }}
+            onSortClick={onWatchlistSortClick}
             pageSize={watchlistPageSize}
             page={watchlistPageSafe}
             totalPages={watchlistTotalPages}
@@ -2270,7 +2271,7 @@ export default function Portfolio() {
                     }}
                     onClick={() => {
                       if (sectorSelectedCodes.length === 0) {
-                        alert('请先选择要添加的基金');
+                        toast.error('请先选择要添加的基金');
                         return;
                       }
                       setShowAddToGroupModal(true);
@@ -2330,16 +2331,16 @@ export default function Portfolio() {
                             const successCount = results.filter((r) => r.success).length;
                             const failCount = results.length - successCount;
                             if (successCount > 0) {
-                              alert(`成功添加 ${successCount} 只基金到分组"${group.name}"${failCount > 0 ? `，${failCount} 只失败` : ''}`);
+                              toast.success(`成功添加 ${successCount} 只基金到分组"${group.name}"${failCount > 0 ? `，${failCount} 只失败` : ''}`);
                               clearCache('portfolio/table');
                               fetchData();
                               fetchWatchlist();
                             } else {
-                              alert('添加失败：' + results.map((r) => r.message).filter(Boolean).join('; '));
+                              toast.error('添加失败：' + results.map((r) => r.message).filter(Boolean).join('; '));
                             }
                             setShowAddToGroupModal(false);
                           } catch (e) {
-                            alert('操作失败：' + (e as Error).message);
+                            toast.error('操作失败：' + (e as Error).message);
                           } finally {
                             setAddToGroupLoading(false);
                           }

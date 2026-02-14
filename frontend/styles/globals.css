@@ -589,21 +589,27 @@ h3 {
 .style-table tbody tr:last-child td {
   border-bottom: 1px solid var(--gh-border-primary);
 }
-/* Sortable Headers */
+/* Sortable Headers：支持从低到高(asc)/从高到低(desc)，点击切换，带过渡与反馈 */
 .style-table th.sortable {
   cursor: pointer;
   user-select: none;
-  transition: color 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+  outline: none;
 }
 .style-table th.sortable:hover {
   color: var(--gh-accent-fg);
+  background-color: var(--gh-bg-secondary);
+}
+.style-table th.sortable:active {
+  transform: scale(0.98);
 }
 .style-table th.sortable::after {
   content: '↕';
   display: inline-block;
-  margin-left: 8px;
-  font-size: 0.8em;
+  margin-left: 6px;
+  font-size: 0.85em;
   color: var(--gh-text-tertiary);
+  transition: transform 0.2s ease, color 0.2s ease;
 }
 .style-table th.sorted-asc::after {
   content: '↑';
@@ -612,6 +618,15 @@ h3 {
 .style-table th.sorted-desc::after {
   content: '↓';
   color: var(--gh-accent-fg);
+}
+.style-table th.sortable.sorted-asc,
+.style-table th.sortable.sorted-desc {
+  background-color: var(--gh-bg-secondary);
+  color: var(--gh-accent-fg);
+}
+/* 表体行在排序切换时的轻微过渡，使变化更平滑 */
+.style-table tbody tr {
+  transition: background-color 0.15s ease;
 }
 .positive {
   color: var(--up) !important;

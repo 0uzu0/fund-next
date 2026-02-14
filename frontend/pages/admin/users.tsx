@@ -1,14 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import Link from 'next/link';
-import { API_BASE } from '../../utils/apiClient';
-
-function getApiBase(): string {
-  if (API_BASE) return API_BASE;
-  if (typeof window !== 'undefined') return window.location.origin;
-  return '';
-}
+import { getApiBase, apiGet, apiPost } from '../../utils/apiClient';
+import { toast } from '../../utils/toast';
 
 type UserRow = {
   id: number;
@@ -25,72 +20,62 @@ export default function AdminUsers() {
   const [addUsername, setAddUsername] = useState('');
   const [addPassword, setAddPassword] = useState('');
   const [addConfirm, setAddConfirm] = useState('');
-  const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const fetchUsers = () => {
-    fetch(getApiBase() + '/api/admin/users', { credentials: 'include' })
-      .then((r) => {
-        if (r.status === 403 || r.status === 401) return Promise.reject(new Error('forbidden'));
-        return r.json();
-      })
+  const fetchUsers = useCallback(() => {
+    apiGet<{ users?: UserRow[] }>(getApiBase() + '/api/admin/users', { cache: { ttl: 0 } })
       .then((data) => setUsers(data.users || []))
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
-    fetch(getApiBase() + '/api/auth/me', { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
+    apiGet<{ username?: string; is_admin?: boolean }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
       .then((data) => {
-        setAuth(data);
+        setAuth({ username: data.username ?? '', is_admin: data.is_admin });
         if (!data.is_admin) router.replace('/portfolio');
         else fetchUsers();
       })
       .catch(() => router.replace('/login?redirect=/admin/users'));
-  }, [router]);
+  }, [router, fetchUsers]);
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
     const u = addUsername.trim();
     if (!u || !addPassword) {
-      setMessage({ type: 'error', text: '请输入用户名和密码' });
+      toast.error('请输入用户名和密码');
       return;
     }
     if (u.length < 3 || u.length > 20) {
-      setMessage({ type: 'error', text: '用户名长度应为 3–20 个字符' });
+      toast.error('用户名长度应为 3–20 个字符');
       return;
     }
     if (addPassword.length < 6) {
-      setMessage({ type: 'error', text: '密码长度至少为 6 个字符' });
+      toast.error('密码长度至少为 6 个字符');
       return;
     }
     if (addPassword !== addConfirm) {
-      setMessage({ type: 'error', text: '两次输入的密码不一致' });
+      toast.error('两次输入的密码不一致');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await fetch(getApiBase() + '/api/admin/add-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ username: u, password: addPassword }),
-      });
-      const data = await res.json();
+      const data = await apiPost<{ success?: boolean; message?: string }>(
+        getApiBase() + '/api/admin/add-user',
+        { username: u, password: addPassword }
+      );
       if (data.success) {
-        setMessage({ type: 'success', text: data.message || '用户已创建' });
+        toast.success(data.message || '用户已创建');
         setAddUsername('');
         setAddPassword('');
         setAddConfirm('');
         fetchUsers();
       } else {
-        setMessage({ type: 'error', text: data.message || '创建失败' });
+        toast.error(data.message || '创建失败');
       }
     } catch {
-      setMessage({ type: 'error', text: '请求失败' });
+      toast.error('请求失败');
     } finally {
       setSubmitting(false);
     }
@@ -99,22 +84,16 @@ export default function AdminUsers() {
   const handleDelete = (user: UserRow) => {
     if (!confirm('确定要删除用户「' + user.username + '」吗？其基金数据将一并删除。')) return;
     setDeletingId(user.id);
-    fetch(getApiBase() + '/api/admin/delete-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ user_id: user.id }),
-    })
-      .then((r) => r.json())
+    apiPost<{ success?: boolean; message?: string }>(getApiBase() + '/api/admin/delete-user', { user_id: user.id })
       .then((data) => {
         if (data.success) {
-          setMessage({ type: 'success', text: data.message || '已删除' });
+          toast.success(data.message || '已删除');
           fetchUsers();
         } else {
-          setMessage({ type: 'error', text: data.message || '删除失败' });
+          toast.error(data.message || '删除失败');
         }
       })
-      .catch(() => setMessage({ type: 'error', text: '请求失败' }))
+      .catch(() => toast.error('请求失败'))
       .finally(() => setDeletingId(null));
   };
 
@@ -136,19 +115,6 @@ export default function AdminUsers() {
             新增用户、查看与删除已有用户；
             <Link href="/admin/profile" style={{ color: 'var(--accent)', marginLeft: 8 }}>修改管理员账号</Link>
           </p>
-
-          {message && (
-            <div
-              className="content-card"
-              style={{
-                marginBottom: 16,
-                padding: 12,
-                color: message.type === 'error' ? 'var(--down-color)' : 'var(--up-color)',
-              }}
-            >
-              {message.text}
-            </div>
-          )}
 
           <div className="content-card" style={{ marginBottom: 24 }}>
             <h2 style={{ fontSize: '1rem', color: 'var(--text-dim)', marginBottom: 16 }}>新增用户</h2>
