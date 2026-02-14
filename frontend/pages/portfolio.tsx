@@ -2219,9 +2219,9 @@ export default function Portfolio() {
           {/* 选择板块（标注用） */}
           {showSectorTagModal && (
             <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => !sectorSubmitLoading && setShowSectorTagModal(false)}>
-              <div className="sector-modal-content" style={{ maxWidth: 720, width: '95%', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', gap: 16 }} onClick={(e) => e.stopPropagation()}>
+              <div className="sector-modal-content sector-modal-two-col" style={{ maxWidth: 720, width: '95%', maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'row', gap: 16 }} onClick={(e) => e.stopPropagation()}>
                 {/* 左侧：板块选择 */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                <div className="sector-modal-two-col-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <div className="sector-modal-header">选择板块</div>
                   <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
                     {Object.entries(SECTOR_CATEGORIES).map(([category, tags]) => (
@@ -2257,7 +2257,7 @@ export default function Portfolio() {
                   </div>
                 </div>
                 {/* 右侧：添加分组功能 */}
-                <div style={{ width: 180, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
+                <div className="sector-modal-two-col-side" style={{ width: 180, display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border)', paddingLeft: 16 }}>
                   <div style={{ marginBottom: 12, color: 'var(--text-main)', fontSize: 'var(--font-size-xs)', fontWeight: 600 }}>功能</div>
                   <button
                     type="button"

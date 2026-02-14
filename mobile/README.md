@@ -26,14 +26,19 @@ npx expo start
 
 在 Expo 界面按 `a` 启动 Android。
 
-## 配置前端地址
+## 使用流程（APK / 真机）
 
-App 通过 WebView 加载前端页面，需保证设备能访问前端地址：
+打开 App 后按以下顺序：
 
-- **Android 模拟器**：默认使用 `http://10.0.2.2:3000`（模拟器访问本机 3000 端口）
-- **真机**：需与电脑同网，并设置 `EXPO_PUBLIC_WEB_URL` 为电脑 IP，例如 `http://192.168.1.100:3000`
+1. **服务端地址**：首次使用需填写前端页面地址（如 `https://你的域名` 或 `http://192.168.1.100:3000`），点击「保存并进入登录」。
+2. **登录页**：在 WebView 中完成登录；登录成功后会自动进入主界面，也可点击「已登录，直接进入」跳过。
+3. **功能页**：底部四个 Tab（持仓基金、贵金属行情、行业板块、用户管理），内容均通过 WebView 加载已配置地址下的对应页面。
 
-在 `mobile` 目录创建 `.env`：
+地址会保存在本机，下次打开会直接进入登录页。
+
+## 配置前端地址（开发时）
+
+开发时若希望默认使用某地址，可在 `mobile` 目录创建 `.env`：
 
 ```
 EXPO_PUBLIC_WEB_URL=http://192.168.1.100:3000
@@ -45,9 +50,11 @@ EXPO_PUBLIC_WEB_URL=http://192.168.1.100:3000
 EXPO_PUBLIC_WEB_URL=http://你的电脑IP:3000 npx expo start
 ```
 
+- **Android 模拟器**：未配置时默认使用 `http://10.0.2.2:3000`（模拟器访问本机 3000 端口）。
+
 ## 打包 APK
 
-在项目根目录：
+在项目根目录执行（已支持 Windows / macOS / Linux）：
 
 ```bash
 npm run mobile:build:apk
@@ -56,12 +63,12 @@ npm run mobile:build:apk
 或在 `mobile` 目录：
 
 ```bash
-npx expo prebuild --platform android --clean
-cd android
-./gradlew assembleRelease
+node scripts/build-apk.js
 ```
 
-APK 输出在 `android/app/build/outputs/apk/release/`。Windows 下可改用 `gradlew.bat assembleRelease`。
+APK 输出在 `mobile/android/app/build/outputs/apk/release/app-release.apk`。
+
+**本地环境要求**（JDK 17、Android SDK 等）见 [构建手机APK本地环境](../docs/构建手机APK本地环境.md)。
 
 ## GitHub Actions 打包
 

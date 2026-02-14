@@ -11,6 +11,10 @@ on:
         description: '发布版本标签（留空仅产出 Artifact；填如 v1.0.0 则创建 Release 并上传 APK）'
         required: false
         type: string
+      web_url:
+        description: '前端 Web 地址（WebView 加载用，如 https://your-domain.com；留空则使用 10.0.2.2:3000，仅适用于模拟器）'
+        required: false
+        type: string
 
 env:
   NODE_VERSION: '20'
@@ -52,12 +56,28 @@ jobs:
         working-directory: mobile
         run: npm ci --prefer-offline --no-audit || npm install
 
+      # WebView 加载的前端地址：手动触发可填 web_url；按 tag 推送请在仓库 Settings → Variables 中配置 PRODUCTION_WEB_URL（如 https://你的前端域名）
+      - name: Set Web URL for WebView
+        id: weburl
+        run: |
+          if [ -n "${{ github.event.inputs.web_url }}" ]; then
+            echo "url=${{ github.event.inputs.web_url }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ vars.PRODUCTION_WEB_URL }}" ]; then
+            echo "url=${{ vars.PRODUCTION_WEB_URL }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=" >> $GITHUB_OUTPUT
+          fi
+
       - name: Generate Android project
         working-directory: mobile
+        env:
+          EXPO_PUBLIC_WEB_URL: ${{ steps.weburl.outputs.url }}
         run: npx expo prebuild --platform android --clean
 
       - name: Build Release APK
         working-directory: mobile/android
+        env:
+          EXPO_PUBLIC_WEB_URL: ${{ steps.weburl.outputs.url }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useServerUrl } from '../context/ServerUrlContext';
 import { WEB_BASE_URL } from '../config';
 
 type Props = {
@@ -8,16 +9,27 @@ type Props = {
 };
 
 export function WebViewScreen({ path }: Props) {
-  const base = WEB_BASE_URL || 'http://10.0.2.2:3000';
+  const { serverUrl } = useServerUrl();
+  const base = serverUrl || WEB_BASE_URL || 'http://10.0.2.2:3000';
   const uri = `${base.replace(/\/$/, '')}${path.startsWith('/') ? path : '/' + path}`;
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true); // 用于 onLoadEnd 后隐藏 loading
+
+  // 注入脚本：为 body 添加 lanfund-app，触发前端 CSS 隐藏横向侧边栏、预留底部栏空间
+  const injectHideSidebar = `
+    (function() {
+      function addClass() { if (document.body) document.body.classList.add('lanfund-app'); }
+      if (document.body) addClass(); else document.addEventListener('DOMContentLoaded', addClass);
+    })();
+    true;
+  `;
 
   return (
     <View style={StyleSheet.absoluteFill}>
       <WebView
         source={{ uri }}
         style={styles.webview}
+        injectedJavaScriptBeforeContentLoaded={injectHideSidebar}
         startInLoadingState
         onLoadStart={() => { setError(null); setLoading(true); }}
         onLoadEnd={() => setLoading(false)}
@@ -50,9 +62,10 @@ export function WebViewScreen({ path }: Props) {
         <View style={styles.errorBox}>
           <Text style={styles.errorTitle}>页面加载错误</Text>
           <Text style={styles.errorDesc}>{error}</Text>
+          <Text style={styles.errorUrl}>请求地址: {uri}</Text>
           <Text style={styles.errorHint}>
             若为 net::ERR_CLEARTEXT_NOT_PERMITTED，请重新打包 APK 并确认 app 已允许明文流量；
-            真机请设置 .env 中 EXPO_PUBLIC_WEB_URL=http://你的电脑IP:3000
+            真机或正式包请在构建时设置 EXPO_PUBLIC_WEB_URL 为可访问的前端地址（如 https://你的域名 或 http://电脑IP:3000）
           </Text>
         </View>
       ) : null}
@@ -87,6 +100,7 @@ const styles = StyleSheet.create({
     borderColor: '#475569',
   },
   errorTitle: { color: '#f87171', fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  errorDesc: { color: '#cbd5e1', fontSize: 14, marginBottom: 12 },
+  errorDesc: { color: '#cbd5e1', fontSize: 14, marginBottom: 8 },
+  errorUrl: { color: '#94a3b8', fontSize: 12, marginBottom: 12 },
   errorHint: { color: '#94a3b8', fontSize: 12 },
 });

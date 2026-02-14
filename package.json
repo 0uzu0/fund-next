@@ -15,7 +15,7 @@
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "mobile:install": "cd mobile && npm install",
     "mobile:start": "cd mobile && npm start",
-    "mobile:build:apk": "cd mobile && npx expo prebuild --platform android --clean && cd android && chmod +x gradlew && ./gradlew assembleRelease"
+    "mobile:build:apk": "cd mobile && node scripts/build-apk.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
