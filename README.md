@@ -42,6 +42,7 @@
 - **💾 数据持久化**：SQLite 数据库，数据安全可靠
 - **🔐 用户认证**：Session + Cookie 安全认证机制
 - **📊 市场行情**：7×24 小时快讯、市场指数、贵金属行情
+- **🤖 AI 助手**：持仓页浮动问答（可配置 OpenAI、DeepSeek 等接口）
 
 ### 📱 页面功能
 
@@ -120,6 +121,13 @@ PORT=8311
 
 # CORS 配置（生产环境）
 CORS_ORIGIN=http://localhost:3000
+
+# AI 助手（可选，支持 OpenAI / DeepSeek 等兼容接口；不配置则不显示持仓页浮动助手）
+# AI_API_URL=https://api.openai.com
+# AI_API_URL=https://api.deepseek.com
+# AI_API_KEY=sk-xxx
+# AI_MODEL=gpt-4o-mini
+# AI_MODEL=deepseek-chat
 ```
 
 **前端配置** (`frontend/.env.local`):
@@ -221,6 +229,11 @@ fund-next/
 #   DOCKER_IMAGE=ghcr.io/你的用户名/fund-next:latest
 #   SESSION_SECRET=一串随机密钥或 UUID
 # 注意：SESSION_SECRET 写明文，不要写 ${SESSION_SECRET:xxx}，否则 Compose 会报错
+#
+# 可选 - AI 助手（持仓页浮动问答，需 OpenAI/DeepSeek 等兼容接口）：
+#   AI_API_URL=https://api.openai.com
+#   AI_API_KEY=sk-xxx
+#   AI_MODEL=gpt-4o-mini
 
 docker-compose up -d
 

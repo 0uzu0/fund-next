@@ -27,6 +27,7 @@ import HoldingTable from '../components/portfolio/HoldingTable';
 import WatchlistSection from '../components/portfolio/WatchlistSection';
 import FundDetailModal from '../components/portfolio/FundDetailModal';
 import EditHoldingModal from '../components/portfolio/EditHoldingModal';
+import AiAssistant from '../components/AiAssistant';
 
 const FundChart = dynamic(() => import('../components/FundChart'), {
   loading: () => null,
@@ -998,6 +999,20 @@ export default function Portfolio() {
     const first = fundRows.find((r) => toNum(r.holding) > 0) || fundRows[0];
     return first ? isEstimateStale(first.estimateDate) : false;
   }, [fundRows]);
+
+  const aiContext = useMemo(() => {
+    const parts: string[] = [];
+    parts.push(`总持仓约 ${formatMoney(summary.totalHolding)}，今日预估涨跌 ${formatMoney(summary.todayEstChange)}（${formatPct(summary.todayEstPct)}），累计收益 ${formatMoney(displayCumulative)}。`);
+    if (fundRows.length > 0) {
+      parts.push('持仓基金：');
+      fundRows.forEach((r) => {
+        const hold = toNum(r.holding);
+        if (hold <= 0) return;
+        parts.push(`- ${r.code} ${r.name || ''} 份额${hold} 今日预估${formatPct(r.todayEstPct ?? 0)}`);
+      });
+    }
+    return parts.join('\n');
+  }, [summary.totalHolding, summary.todayEstChange, summary.todayEstPct, displayCumulative, fundRows]);
 
   const openCumulativeCorrectionModal = () => {
     setCumulativeCorrectionInput(cumulativeCorrection === 0 ? '' : String(cumulativeCorrection));
@@ -2502,6 +2517,7 @@ export default function Portfolio() {
               </div>
             </div>
           )}
+      <AiAssistant context={aiContext} />
     </>
   );
 }
