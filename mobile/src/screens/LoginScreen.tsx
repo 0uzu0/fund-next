@@ -3,10 +3,12 @@ import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'rea
 import { WebView } from 'react-native-webview';
 import type { NativeSyntheticEvent } from 'react-native';
 import type { WebViewNavigation } from 'react-native-webview';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useServerUrl } from '../context/ServerUrlContext';
 
 type Props = {
   onLoggedIn: () => void;
+  onBackToServerAddress?: () => void;
 };
 
 const LOGIN_PATH = '/login';
@@ -21,7 +23,8 @@ function isLoginUrl(url: string): boolean {
   }
 }
 
-export function LoginScreen({ onLoggedIn }: Props) {
+export function LoginScreen({ onLoggedIn, onBackToServerAddress }: Props) {
+  const insets = useSafeAreaInsets();
   const { serverUrl } = useServerUrl();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,16 @@ export function LoginScreen({ onLoggedIn }: Props) {
 
   return (
     <View style={StyleSheet.absoluteFill}>
+      {onBackToServerAddress ? (
+        <TouchableOpacity
+          style={[styles.backBar, { paddingTop: Math.max(12, insets.top) + 8 }]}
+          onPress={onBackToServerAddress}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.backBarIcon}>←</Text>
+          <Text style={styles.backBarText}>返回重新选择服务器</Text>
+        </TouchableOpacity>
+      ) : null}
       <WebView
         ref={webViewRef}
         source={{ uri: loginUri }}
@@ -104,16 +117,30 @@ export function LoginScreen({ onLoggedIn }: Props) {
           <Text style={styles.loadingText}>正在打开登录页…</Text>
         </View>
       ) : null}
-      <View style={styles.footer}>
-        <TouchableOpacity onPress={onLoggedIn} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }}>
-          <Text style={styles.enterLink}>已登录，直接进入</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  backBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: 'rgba(30,41,59,0.98)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  backBarIcon: {
+    fontSize: 20,
+    color: '#a78bfa',
+    marginRight: 8,
+  },
+  backBarText: {
+    fontSize: 15,
+    color: '#94a3b8',
+  },
   webview: {
     flex: 1,
     backgroundColor: '#1a1a2e',
@@ -157,10 +184,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryBtnText: { color: '#fff', fontWeight: '600' },
-  footer: {
-    paddingVertical: 12,
-    paddingBottom: 12,
-    alignItems: 'center',
-  },
-  enterLink: { color: '#94a3b8', fontSize: 13 },
 });

@@ -9,12 +9,12 @@ const NO_LAYOUT_PAGES = ['/login', '/'];
 function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = router.pathname;
-  
+
   // 登录页面和首页不需要 Layout
   if (NO_LAYOUT_PAGES.includes(pathname)) {
     return <>{children}</>;
   }
-  
+
   return (
     <>
       <TopNavbar />

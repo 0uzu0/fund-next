@@ -4,6 +4,7 @@ import { WebView } from 'react-native-webview';
 import type { WebViewNavigation } from 'react-native-webview';
 import { useServerUrl } from '../context/ServerUrlContext';
 import { WEB_BASE_URL } from '../config';
+import { WEBVIEW_APP_CSS } from '../styles/webviewAppOverrides';
 
 type Props = {
   path: string;
@@ -35,11 +36,21 @@ export function WebViewScreen({ path, onNavigateToLogin }: Props) {
     onNavigateToLogin();
   };
 
-  // 注入脚本：为 body 添加 morefund-app，触发前端 CSS 隐藏横向侧边栏、预留底部栏空间
-  const injectHideSidebar = `
+  // 与前端解耦：本端注入样式并移除 Web 顶栏/侧栏节点，客户端无顶部导航，仅底部 Tab；不依赖前端逻辑
+  const injectAppStyles = `
     (function() {
-      function addClass() { if (document.body) document.body.classList.add('morefund-app'); }
-      if (document.body) addClass(); else document.addEventListener('DOMContentLoaded', addClass);
+      var css = ${JSON.stringify(WEBVIEW_APP_CSS)};
+      var el = document.createElement('style');
+      el.textContent = css;
+      (document.head || document.documentElement).appendChild(el);
+      function removeTopAndSideNav() {
+        var top = document.querySelector('.top-navbar');
+        if (top) top.remove();
+        var side = document.querySelector('.sidebar-nav');
+        if (side) side.remove();
+      }
+      if (document.body) removeTopAndSideNav();
+      else document.addEventListener('DOMContentLoaded', removeTopAndSideNav);
     })();
     true;
   `;
@@ -50,7 +61,7 @@ export function WebViewScreen({ path, onNavigateToLogin }: Props) {
         source={{ uri }}
         style={styles.webview}
         scrollEnabled={true}
-        injectedJavaScriptBeforeContentLoaded={injectHideSidebar}
+        injectedJavaScriptBeforeContentLoaded={injectAppStyles}
         startInLoadingState
         onLoadStart={() => { setError(null); setLoading(true); }}
         onLoadEnd={() => setLoading(false)}

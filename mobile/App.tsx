@@ -14,6 +14,7 @@ import { ROUTES } from './src/config';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// 客户端无顶部导航，仅底部 Tab 导航；Web 页内的顶栏/侧栏由 WebView 注入脚本移除
 const TabScreens = [
   { name: 'Portfolio', path: ROUTES.portfolio, label: '持仓基金', icon: '💼' },
   { name: 'PreciousMetals', path: ROUTES.preciousMetals, label: '贵金属行情', icon: '🥇' },
@@ -29,7 +30,7 @@ function MainTabs({ onNavigateToLogin }: { onNavigateToLogin?: () => void }) {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerShown: false,
+        headerShown: false, // 无顶部导航，仅底部 Tab
         tabBarActiveTintColor: '#a78bfa',
         tabBarInactiveTintColor: '#94a3b8',
         tabBarStyle: {
@@ -59,7 +60,7 @@ function MainTabs({ onNavigateToLogin }: { onNavigateToLogin?: () => void }) {
   );
 }
 
-// 根栈：未配置地址时先显示 ServerAddress，否则显示 Login；从 Login 进入 Main
+// 根栈：未配置地址时显示 ServerAddress；已配置则直接进 Main，仅当 WebView 跳转到 /login 时再显示登录页
 function RootStack() {
   const { serverUrl, isLoading } = useServerUrl();
 
@@ -74,7 +75,7 @@ function RootStack() {
 
   return (
     <Stack.Navigator
-      initialRouteName={!serverUrl ? 'ServerAddress' : 'Login'}
+      initialRouteName={!serverUrl ? 'ServerAddress' : 'Main'}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: '#1a1a2e' },
@@ -91,6 +92,7 @@ function RootStack() {
         {({ navigation }) => (
           <LoginScreen
             onLoggedIn={() => navigation.replace('Main')}
+            onBackToServerAddress={() => navigation.replace('ServerAddress')}
           />
         )}
       </Stack.Screen>
