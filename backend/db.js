@@ -1,6 +1,7 @@
 /**
- * SQLite 数据库层（sql.js，无需本地编译），与 Python Database 表结构一致
- * Docker 部署时请设置 DB_PATH=/app/data/fund_data.db 并挂载 volume 到 /app/data 以持久化基金列表等数据
+ * SQLite 数据库层（基于 sql.js，纯 JS 无需本地编译）
+ * 表结构与原 Python 版一致，用于用户、基金、分组、持仓记录、缓存、图表数据等
+ * 部署：生产环境可设置 DB_PATH=/app/data/fund_data.db 并挂载 volume 持久化
  */
 const path = require('path');
 const fs = require('fs');
@@ -30,7 +31,7 @@ function getDb() {
   return _db;
 }
 
-// 兼容 better-sqlite3 的 prepare().run/get/all 用法
+/** 包装 sql.js 的 prepare，提供 run/get/all 以兼容 better-sqlite3 用法，便于迁移与复用 */
 function wrapStmt(sql) {
   const db = getDb();
   return {
@@ -114,6 +115,7 @@ async function initDb() {
       fund_name TEXT,
       op TEXT NOT NULL,
       amount REAL NOT NULL,
+      units REAL,
       trade_date TEXT NOT NULL,
       period TEXT,
       prev_holding_units REAL NOT NULL,
@@ -148,6 +150,15 @@ async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_fund_chart_date ON fund_chart_data(fund_code, date);
     CREATE INDEX IF NOT EXISTS idx_fund_chart_updated ON fund_chart_data(updated_at);
   `);
+
+  // 迁移：为已存在的 position_records 表补充 units 列（仅启动时执行一次，避免路由中重复检查）
+  try {
+    const info = wrapper.prepare('PRAGMA table_info(position_records)').all();
+    const hasUnits = info.some((col) => col.name === 'units');
+    if (!hasUnits) wrapper.exec('ALTER TABLE position_records ADD COLUMN units REAL');
+  } catch (e) {
+    /* 表不存在时忽略 */
+  }
 
   const bcrypt = require('bcryptjs');
   const adminHash = bcrypt.hashSync('admin', 10);

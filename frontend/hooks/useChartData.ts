@@ -1,3 +1,7 @@
+/**
+ * 图表数据 Hook：预加载、缓存、按需拉取、sessionStorage 持久化
+ * 与后端 /api/fund/chart-data 及 /api/fund/chart-data/preload 的压缩格式（l/g/n）对应
+ */
 import { useState, useEffect, useCallback, useRef, startTransition } from 'react';
 import { apiGet, API_BASE } from '../utils/apiClient';
 
@@ -9,11 +13,22 @@ export type ChartData = {
   net_values?: number[];
 };
 
-// sessionStorage 键名
+/** 后端返回的压缩格式（减少传输体积） */
+type CompressedChartData = { l?: string[]; g?: number[]; n?: number[] };
+
 const CHART_DATA_STORAGE_KEY = 'fund_chart_preload_data';
 const CHART_DATA_TIMESTAMP_KEY = 'fund_chart_preload_timestamp';
-// 数据有效期：30分钟
-const DATA_EXPIRY_MS = 30 * 60 * 1000;
+const DATA_EXPIRY_MS = 30 * 60 * 1000; // 30 分钟
+
+/** 将后端压缩格式 l/g/n 解压为 ChartData，供预加载与单基金请求复用 */
+function decompressChartData(compressed: CompressedChartData | Record<string, unknown>): ChartData {
+  const c = compressed as Record<string, unknown>;
+  return {
+    labels: (c.l as string[]) || (c.labels as string[]) || [],
+    growth: (c.g as number[]) || (c.growth as number[]) || [],
+    net_values: (c.n as number[] | undefined) ?? (c.net_values as number[] | undefined),
+  };
+}
 
 export interface UseChartDataReturn {
   // 当前选中的基金
@@ -70,15 +85,9 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         if (now - timestamp < DATA_EXPIRY_MS) {
           const compressedData = JSON.parse(dataStr);
           console.log('[sessionStorage] 从浏览器缓存加载', Object.keys(compressedData).length, '只基金的图表数据');
-          
-          // 解压缩数据格式
           const cachedData: Record<string, ChartData> = {};
-          Object.entries(compressedData).forEach(([code, data]: [string, any]) => {
-            const chartData: ChartData = {
-              labels: data.l || data.labels || [],
-              growth: data.g || data.growth || [],
-              net_values: data.n || data.net_values,
-            };
+          Object.entries(compressedData).forEach(([code, data]) => {
+            const chartData = decompressChartData(data as CompressedChartData);
             cachedData[code] = chartData;
             chartDataCache.current.set(code, chartData);
           });
@@ -102,20 +111,14 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
   }, []);
 
   // 保存预加载数据到 sessionStorage（优化：压缩数据）
+  /** 将预加载数据写入 sessionStorage（压缩格式 l/g/n），减少占用 */
   const savePreloadDataToStorage = useCallback((dataMap: Record<string, ChartData>) => {
     if (typeof window === 'undefined') return;
-    
     try {
       const timestamp = Date.now();
-      // 优化：压缩数据格式，减少存储空间
-      const compressedData: Record<string, any> = {};
+      const compressedData: Record<string, { l: string[]; g: number[]; n?: number[] }> = {};
       Object.entries(dataMap).forEach(([code, data]) => {
-        // 只保存必要字段，减少 JSON 大小
-        compressedData[code] = {
-          l: data.labels,      // labels 简写
-          g: data.growth,      // growth 简写
-          n: data.net_values,  // net_values 简写
-        };
+        compressedData[code] = { l: data.labels, g: data.growth, n: data.net_values };
       });
       
       sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
@@ -127,14 +130,9 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
       try {
         sessionStorage.removeItem(CHART_DATA_STORAGE_KEY);
         sessionStorage.removeItem(CHART_DATA_TIMESTAMP_KEY);
-        // 再次尝试保存压缩数据
-        const compressedData: Record<string, any> = {};
+        const compressedData: Record<string, { l: string[]; g: number[]; n?: number[] }> = {};
         Object.entries(dataMap).forEach(([code, data]) => {
-          compressedData[code] = {
-            l: data.labels,
-            g: data.growth,
-            n: data.net_values,
-          };
+          compressedData[code] = { l: data.labels, g: data.growth, n: data.net_values };
         });
         sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
         sessionStorage.setItem(CHART_DATA_TIMESTAMP_KEY, Date.now().toString());
@@ -163,15 +161,9 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         .then((data) => {
           if (data.success && data.chart_data_map) {
             console.log('[预加载] 成功加载', Object.keys(data.chart_data_map).length, '只基金的图表数据');
-            
-            // 解压缩数据格式
             const decompressedData: Record<string, ChartData> = {};
-            Object.entries(data.chart_data_map).forEach(([code, compressed]: [string, any]) => {
-              const chartData: ChartData = {
-                labels: compressed.l || compressed.labels || [],
-                growth: compressed.g || compressed.growth || [],
-                net_values: compressed.n || compressed.net_values,
-              };
+            Object.entries(data.chart_data_map).forEach(([code, compressed]) => {
+              const chartData = decompressChartData(compressed as CompressedChartData);
               decompressedData[code] = chartData;
               chartDataCache.current.set(code, chartData);
             });
@@ -255,13 +247,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
             setTimeout(() => {
               if (abortController.signal.aborted) return;
               if (d.chart_data) {
-                // 解压缩数据格式
-                const compressed = d.chart_data;
-                const data: ChartData = {
-                  labels: compressed.l || compressed.labels || [],
-                  growth: compressed.g || compressed.growth || [],
-                  net_values: compressed.n || compressed.net_values,
-                };
+                const data = decompressChartData(d.chart_data as CompressedChartData);
                 // 缓存数据
                 chartDataCache.current.set(code, data);
                 // 更新预加载数据状态和 sessionStorage
@@ -409,13 +395,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         })
           .then((d) => {
             if (d.chart_data) {
-              // 解压缩数据格式
-              const compressed = d.chart_data;
-              const refreshedData: ChartData = {
-                labels: compressed.l || compressed.labels || [],
-                growth: compressed.g || compressed.growth || [],
-                net_values: compressed.n || compressed.net_values || [],
-              };
+              const refreshedData = decompressChartData(d.chart_data as CompressedChartData);
               
               if (refreshedData.labels && refreshedData.labels.length > 0) {
                 // 更新缓存

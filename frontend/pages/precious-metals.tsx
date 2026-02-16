@@ -182,12 +182,11 @@ function PreciousMetals() {
     ],
   };
 
-  // 准备历史金价图表数据
-  // 后端已经通过 reverse() 反转，数据顺序是从旧到新（从月初到月尾）
-  // 原项目：return gold_list[::-1]，所以数据已经是按时间从早到晚排列
-  const historyLabels = history.map((h) => h.date);
-  const historyChina = history.map((h) => (typeof h.china_gold_price === 'number' ? h.china_gold_price : parseFloat(String(h.china_gold_price)) || 0));
-  const historyChow = history.map((h) => (typeof h.chow_tai_fook_price === 'number' ? h.chow_tai_fook_price : parseFloat(String(h.chow_tai_fook_price)) || 0));
+  // 准备历史金价图表数据：按日期从以前到现在排序，图表横轴左侧为最早、右侧为最新
+  const historySorted = [...history].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const historyLabels = historySorted.map((h) => h.date);
+  const historyChina = historySorted.map((h) => (typeof h.china_gold_price === 'number' ? h.china_gold_price : parseFloat(String(h.china_gold_price)) || 0));
+  const historyChow = historySorted.map((h) => (typeof h.chow_tai_fook_price === 'number' ? h.chow_tai_fook_price : parseFloat(String(h.chow_tai_fook_price)) || 0));
 
   const historyChartData = {
     labels: historyLabels,

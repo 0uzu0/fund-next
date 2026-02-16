@@ -1,7 +1,9 @@
 /**
- * 持仓页工具函数：净值解析、日期、待加仓/待减仓本地存储等
+ * 持仓页工具函数：净值解析、日期计算、待加仓/待减仓 localStorage 读写
+ * 供 portfolio、EditHoldingModal、加仓减仓等复用
  */
 
+/** 从展示字符串（如 "1.2345(02-15)"）解析出净值数字 */
 export function parseNetValue(s: string | undefined): number {
   if (s == null || s === '' || s === '—') return 0;
   const parts = String(s).split('(');

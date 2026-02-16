@@ -1,17 +1,19 @@
 /**
- * 数据缓存层：必要数据写入数据库 cache_store，带 TTL 的读写
- * 用于基金行情/估值、图表分时、市场快讯等外部接口结果缓存
+ * 数据缓存层：将外部接口结果写入 SQLite cache_store，支持 TTL 读写
+ * 用于基金行情/估值、图表分时、市场快讯等，减少重复请求、提高响应速度
  */
 const db = require('./db');
 
+/** 各业务默认 TTL（毫秒） */
 const DEFAULT_TTL_MS = {
-  fundMatiaria: 90 * 1000,       // 单只基金行情页 90 秒
+  fundMatiaria: 90 * 1000,       // 单只基金行情 90 秒
   fundCurves: 24 * 60 * 60 * 1000, // 近一月曲线 24 小时
   fundIntraday: 90 * 1000,        // 当日估值分时 90 秒
   marketKx: 2 * 60 * 1000,        // 7*24 快讯 2 分钟
 };
 
 /**
+ * 读取缓存，过期则返回 null
  * @param {string} key 缓存键
  * @param {number} [ttlMs] 有效时长（毫秒），不传则永久有效
  * @returns {any|null} 解析后的 JSON 或 null
@@ -31,6 +33,7 @@ function get(key, ttlMs) {
 }
 
 /**
+ * 写入缓存（INSERT OR REPLACE）
  * @param {string} key 缓存键
  * @param {any} value 可 JSON 序列化的值
  */

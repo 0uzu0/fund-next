@@ -91,7 +91,9 @@ async function fetchGoldHistory() {
       chow_tai_fook_change: radio2,
     });
   }
-  return list.reverse();
+  // 按日期升序排列：从以前到现在，图表横轴左侧为最早、右侧为最新
+  list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  return list;
 }
 
 /**

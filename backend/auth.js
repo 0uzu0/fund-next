@@ -1,5 +1,6 @@
 /**
- * 认证中间件与工具
+ * 认证中间件与工具：登录校验、会话、管理员权限
+ * 供路由 loginRequired / adminRequired 及 getCurrentUserId / getCurrentUsername 复用
  */
 const bcrypt = require('bcryptjs');
 const db = require('./db');

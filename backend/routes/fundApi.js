@@ -22,11 +22,29 @@ const axios = require('axios');
 
 const upload = multer({ dest: path.join(__dirname, '../tmp') });
 
-// 解析 fund_codes JSON 数组或字符串
+/**
+ * 解析请求中的 fund_codes：支持 JSON 数组或逗号/空格分隔字符串，供添加/删除/板块等接口复用
+ * @param {any} codes - 基金代码数组或字符串
+ * @returns {string[]}
+ */
 function parseFundCodes(codes) {
   if (Array.isArray(codes)) return codes.map(String).filter(Boolean);
   if (typeof codes === 'string') return codes.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
   return [];
+}
+
+/**
+ * 图表数据压缩：将 labels/growth/net_values 转为 l/g/n，减少传输与存储体积
+ * @param {{ labels?: string[], growth?: number[], net_values?: number[] }} chartData
+ * @returns {{ l: string[], g: number[], n?: number[] }}
+ */
+function compressChartData(chartData) {
+  if (!chartData) return { l: [], g: [], n: [] };
+  return {
+    l: chartData.labels || [],
+    g: chartData.growth || [],
+    n: chartData.net_values || [],
+  };
 }
 
 // ---------- 基金联想搜索（东方财富 suggest，参考 real-time-fund）----------
@@ -320,14 +338,6 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
       const tDate = (trade_date && String(trade_date).trim()) || '';
       if (Number.isFinite(amt) && tDate) {
         try {
-          // 检查是否有units字段，如果没有则添加
-          try {
-            db.prepare('SELECT units FROM position_records LIMIT 1').get();
-          } catch (e) {
-            // 字段不存在，添加字段
-            db.exec('ALTER TABLE position_records ADD COLUMN units REAL');
-          }
-          
           db.prepare(
             `INSERT INTO position_records (user_id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -350,7 +360,12 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
   }
 });
 
-// 判断持仓记录是否仍可撤销（当日15:00前操作须在当日15:00前撤销，当日15:00后须在次日15:00前撤销）
+/**
+ * 判断持仓记录是否仍可撤销
+ * 规则：当日 15:00 前操作须在当日 15:00 前撤销，当日 15:00 后须在次日 15:00 前撤销
+ * @param {{ trade_date?: string, period?: string }} record
+ * @returns {boolean}
+ */
 function checkPositionRecordUndoDeadline(record) {
   const tradeDate = (record.trade_date || '').trim();
   if (!tradeDate) return true;
@@ -375,14 +390,6 @@ function checkPositionRecordUndoDeadline(record) {
 router.get('/api/fund/position-records', loginRequired, (req, res) => {
   try {
     const userId = getCurrentUserId(req);
-    // 检查是否有units字段，如果没有则添加
-    try {
-      db.prepare('SELECT units FROM position_records LIMIT 1').get();
-    } catch (e) {
-      // 字段不存在，添加字段
-      db.exec('ALTER TABLE position_records ADD COLUMN units REAL');
-    }
-    
     const rows = db.prepare(
       `SELECT id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit, created_at
        FROM position_records WHERE user_id = ? ORDER BY created_at DESC`
@@ -477,6 +484,11 @@ router.post('/api/fund/groups', loginRequired, (req, res) => {
   }
 });
 
+/**
+ * 获取或创建用户的默认分组（sort_order=0），分组相关接口复用
+ * @param {number} userId
+ * @returns {{ id: number, name: string, fund_codes: string, sort_order: number } | null}
+ */
 function getOrCreateDefaultGroup(userId) {
   let row = db.prepare('SELECT id, name, fund_codes, sort_order FROM fund_groups WHERE user_id = ? AND sort_order = 0 LIMIT 1').get(userId);
   if (!row) {
@@ -487,7 +499,11 @@ function getOrCreateDefaultGroup(userId) {
   return { id: row.id, name: row.name, fund_codes: row.fund_codes, sort_order: row.sort_order };
 }
 
-/** 从分组对象取 fund_codes 数组（兼容 DB 字符串与已解析的数组） */
+/**
+ * 从分组对象取 fund_codes 数组（兼容 DB 存字符串与已解析的数组）
+ * @param {{ fund_codes?: string | string[] }} g
+ * @returns {string[]}
+ */
 function groupFundCodes(g) {
   if (!g) return [];
   if (Array.isArray(g.fund_codes)) return g.fund_codes;
@@ -836,14 +852,8 @@ router.get('/api/fund/chart-data/preload', loginRequired, async (req, res) => {
       if (cachedRow && cachedRow.chart_data) {
         try {
           const chart_data = JSON.parse(cachedRow.chart_data);
-          // 确保数据格式正确：只包含 labels, growth, net_values
           if (chart_data.labels && chart_data.growth && chart_data.labels.length > 0) {
-            // 优化：压缩数据格式，减少传输大小
-            chartDataMap[fund.fund_code] = {
-              l: chart_data.labels || [],      // labels 简写
-              g: chart_data.growth || [],      // growth 简写
-              n: chart_data.net_values || [], // net_values 简写
-            };
+            chartDataMap[fund.fund_code] = compressChartData(chart_data);
           }
         } catch (e) {
           console.warn(`[预加载API] 解析基金 ${fund.fund_code} 数据失败:`, e.message);
@@ -896,13 +906,7 @@ router.get('/api/fund/chart-data', loginRequired, async (req, res) => {
     try {
       const chart_data = JSON.parse(cachedRow.chart_data);
       if (chart_data.labels && chart_data.labels.length > 0) {
-        // 优化：压缩数据格式，减少传输大小
-        const compressed = {
-          l: chart_data.labels || [],
-          g: chart_data.growth || [],
-          n: chart_data.net_values || [],
-        };
-        
+        const compressed = compressChartData(chart_data);
         // 设置缓存头
         const etag = `"${code}-${todayStr}-${cachedRow.updated_at}"`;
         res.set({
@@ -942,26 +946,18 @@ router.get('/api/fund/chart-data', loginRequired, async (req, res) => {
         console.warn('保存图表数据到数据库失败:', dbErr);
       }
     }
-    
-    // 优化：压缩数据格式
-    const compressed = {
-      l: chart_data.labels || [],
-      g: chart_data.growth || [],
-      n: chart_data.net_values || [],
-    };
-    
+    const compressed = compressChartData(chart_data);
     res.set({
       'Cache-Control': 'private, max-age=300',
       'Content-Type': 'application/json',
     });
-    
     res.json({
       chart_data: compressed,
       fund_info: { code, name: row.fund_name },
     });
   } catch (e) {
     res.json({
-      chart_data: { l: [], g: [], n: [] },
+      chart_data: compressChartData({ labels: [], growth: [] }),
       fund_info: { code, name: row.fund_name },
     });
   }

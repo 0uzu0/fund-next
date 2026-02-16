@@ -1,3 +1,7 @@
+/**
+ * LanFund 后端入口：Express 服务、会话、静态资源与 SPA 回退
+ * 依赖 initDb 与 chartDataScheduler，启动后提供 /api/* 与前端静态资源
+ */
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
