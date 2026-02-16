@@ -639,11 +639,30 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         cost_per_unit: costPerUnit || 1,
       };
     }
+    // 从减仓记录汇总每只基金的已实现收益，避免减仓后累计收益显示减少
+    let realizedByCode = {};
+    try {
+      const reduceRecords = db.prepare(
+        'SELECT fund_code, amount, units, prev_cost_per_unit FROM position_records WHERE user_id = ? AND op = ?'
+      ).all(userId, 'reduce');
+      for (const rec of reduceRecords) {
+        const units = rec.units != null ? Number(rec.units) : NaN;
+        if (!Number.isFinite(units) || units <= 0) continue;
+        const amount = Number(rec.amount) || 0;
+        const prevCost = Number(rec.prev_cost_per_unit) || 0;
+        const realized = amount - units * prevCost;
+        const code = String(rec.fund_code || '');
+        if (code) realizedByCode[code] = (realizedByCode[code] || 0) + realized;
+      }
+    } catch (e) {
+      // position_records 可能无 units 列或表不存在
+    }
     function buildFallbackRows() {
       const list = [];
       for (const [code, r] of Object.entries(fundMapForHolding)) {
         const meta = fundRows.find(x => x.fund_code === code);
         const holding = (r.holding_units || 0) * (r.cost_per_unit || 1);
+        const realized = realizedByCode[code] || 0;
         list.push({
           code: String(code),
           name: meta ? String(meta.fund_name) : `基金${code}`,
@@ -652,7 +671,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
           estPct: 0,
           actualAmount: 0,
           actualPct: 0,
-          cumulative: 0,
+          cumulative: Number(realized),
           netValue: '—',
           nowTime: '—',
           dayOfGrowth: '—',
@@ -708,6 +727,11 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         return pctB - pctA;
       });
       rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
+      // 累计收益 = 未实现收益（当前持仓） + 历史减仓的已实现收益
+      for (const row of rows) {
+        const realized = realizedByCode[row.code] || 0;
+        row.cumulative = Number(row.cumulative) + Number(realized);
+      }
       if (rows.length === 0 && Object.keys(fundMapForHolding).length > 0) {
         rows = buildFallbackRows();
       }

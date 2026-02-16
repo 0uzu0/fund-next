@@ -101,14 +101,20 @@ export default function Portfolio() {
   // 加仓弹窗（参照 openAddPositionModal）
   const [addPositionRow, setAddPositionRow] = useState<FundRow | null>(null);
   const [addPositionAmount, setAddPositionAmount] = useState('');
-  const [addPositionFeeRate, setAddPositionFeeRate] = useState<0 | 0.1 | 0.15>(0);
+  const BUY_FEE_PRESETS = [0, 0.5, 0.75, 1.5] as const;
+  const SELL_FEE_PRESETS = [0, 0.5, 0.75, 1.5] as const;
+  const [addPositionFeePreset, setAddPositionFeePreset] = useState<typeof BUY_FEE_PRESETS[number] | 'custom'>(0);
+  const [addPositionFeeCustom, setAddPositionFeeCustom] = useState('');
   const [addPositionTime, setAddPositionTime] = useState<{ date: string; period: 'before15' | 'after15' } | null>(null);
   const [addPositionLoading, setAddPositionLoading] = useState(false);
   const [addPositionTimePickerOpen, setAddPositionTimePickerOpen] = useState(false);
   // 减仓弹窗（参照 openReducePositionModal）
   const [reducePositionRow, setReducePositionRow] = useState<FundRow | null>(null);
   const [reducePositionUnits, setReducePositionUnits] = useState('');
-  const [reducePositionFeeRate, setReducePositionFeeRate] = useState<0 | 0.5 | 1 | 1.5>(0);
+  const [reducePositionFeePreset, setReducePositionFeePreset] = useState<typeof SELL_FEE_PRESETS[number] | 'custom'>(0);
+  const [reducePositionFeeCustom, setReducePositionFeeCustom] = useState('');
+  const getAddPositionFeeRate = (): number => addPositionFeePreset === 'custom' ? (parseFloat(addPositionFeeCustom) || 0) : addPositionFeePreset;
+  const getReducePositionFeeRate = (): number => reducePositionFeePreset === 'custom' ? (parseFloat(reducePositionFeeCustom) || 0) : reducePositionFeePreset;
   const [reducePositionTime, setReducePositionTime] = useState<{ date: string; period: 'before15' | 'after15' } | null>(null);
   const [reducePositionLoading, setReducePositionLoading] = useState(false);
   const [reducePositionTimePickerOpen, setReducePositionTimePickerOpen] = useState(false);
@@ -748,8 +754,9 @@ export default function Portfolio() {
     const oldUnits = toNum(addPositionRow.holding_units);
     const oldCost = toNum(addPositionRow.cost_per_unit) || 1;
     
-    // 计算手续费
-    const fee = amount * addPositionFeeRate / 100;
+    // 计算手续费（含预设与自定义费率）
+    const addFeeRate = getAddPositionFeeRate();
+    const fee = amount * addFeeRate / 100;
     // 实际买入金额（扣除手续费后）
     const actualAmount = amount - fee;
     
@@ -774,7 +781,7 @@ export default function Portfolio() {
           cost_per_unit: newCost,
           record_op: 'add',
           amount, // 已买入金额（用于记录显示）
-          fee_rate: addPositionFeeRate, // 买入费率
+          fee_rate: addFeeRate, // 买入费率（预设或自定义）
           trade_date: buyDate,
           period: isAfter15 ? 'after15' : 'before15',
           fund_name: addPositionRow.name,
@@ -840,7 +847,8 @@ export default function Portfolio() {
     if (newUnitsRaw < 1e-6) newUnitsRaw = 0;
     const newUnits = Math.round(newUnitsRaw * 100) / 100; // 持有份额保留2位小数
     
-    const reduceAmount = reduceUnits * netValue + reduceUnits * netValue * reducePositionFeeRate / 100;
+    const reduceFeeRate = getReducePositionFeeRate();
+    const reduceAmount = reduceUnits * netValue + reduceUnits * netValue * reduceFeeRate / 100;
     const oldHoldingAmount = oldUnits * oldCost;
     const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
     const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : 1;
@@ -862,7 +870,7 @@ export default function Portfolio() {
           record_op: 'reduce',
           amount, // 持仓金额（用于记录显示）
           units: reduceUnits, // 减仓份额
-          fee_rate: reducePositionFeeRate, // 赎回费率
+          fee_rate: reduceFeeRate, // 赎回费率（预设或自定义）
           trade_date: sellDate,
           period: isAfter15 ? 'after15' : 'before15',
           fund_name: reducePositionRow.name,
@@ -1797,25 +1805,48 @@ export default function Portfolio() {
                   </div>
                   <div style={{ marginTop: 20 }}>
                     <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>买入费率</div>
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
-                      {([0, 0.1, 0.15] as const).map((rate) => (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                      {BUY_FEE_PRESETS.map((rate) => (
                         <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                          <input 
-                            type="radio" 
-                            name="addPositionFeeRate" 
-                            checked={addPositionFeeRate === rate} 
-                            onChange={() => setAddPositionFeeRate(rate)} 
-                            style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }} 
+                          <input
+                            type="radio"
+                            name="addPositionFeeRate"
+                            checked={addPositionFeePreset === rate}
+                            onChange={() => { setAddPositionFeePreset(rate); setAddPositionFeeCustom(''); }}
+                            style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }}
                           />
                           <span style={{ color: 'var(--text-main)' }}>{rate}%</span>
                         </label>
                       ))}
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}>
+                        <input
+                          type="radio"
+                          name="addPositionFeeRate"
+                          checked={addPositionFeePreset === 'custom'}
+                          onChange={() => setAddPositionFeePreset('custom')}
+                          style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ color: 'var(--text-main)' }}>自定义</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          placeholder="%"
+                          value={addPositionFeePreset === 'custom' ? addPositionFeeCustom : ''}
+                          onChange={(e) => { setAddPositionFeePreset('custom'); setAddPositionFeeCustom(e.target.value); }}
+                          onFocus={() => setAddPositionFeePreset('custom')}
+                          disabled={addPositionFeePreset !== 'custom'}
+                          style={{ width: 64, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
+                        />
+                        <span style={{ color: 'var(--text-dim)' }}>%</span>
+                      </label>
                     </div>
                     {addPositionAmount && (
                       <div style={{ marginTop: 8, color: 'var(--text-dim)' }}>
                         {(() => {
                           const inputAmount = parseFloat(addPositionAmount) || 0;
-                          const fee = inputAmount * addPositionFeeRate / 100;
+                          const fee = inputAmount * getAddPositionFeeRate() / 100;
                           const actualAmount = inputAmount - fee;
                           if (addPositionTime) {
                             const oldUnits = toNum(addPositionRow.holding_units);
