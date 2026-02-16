@@ -672,13 +672,15 @@ export default function Portfolio() {
   const openAddPositionModal = (r: FundRow) => {
     setAddPositionRow(r);
     setAddPositionAmount('');
-    setAddPositionFeeRate(0);
+    setAddPositionFeePreset(0);
+    setAddPositionFeeCustom('');
     setAddPositionTime(null);
   };
   const openReducePositionModal = (r: FundRow) => {
     setReducePositionRow(r);
     setReducePositionUnits('');
-    setReducePositionFeeRate(0);
+    setReducePositionFeePreset(0);
+    setReducePositionFeeCustom('');
     setReducePositionTime(null);
   };
 
@@ -1960,31 +1962,63 @@ export default function Portfolio() {
                     />
                     <span style={{ color: 'var(--text-dim)' }}>份</span>
                   </div>
-                  <div style={{ marginTop: 12, color: 'var(--text-dim)' }}>
-                    赎回费率：
-                    {([0, 0.5, 1, 1.5] as const).map((rate) => (
-                      <label key={rate} style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', marginLeft: 12 }}>
-                        <input type="radio" name="reducePositionFeeRate" checked={reducePositionFeeRate === rate} onChange={() => setReducePositionFeeRate(rate)} style={{ marginRight: 4 }} />
-                        {rate}%
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>赎回费率</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
+                      {SELL_FEE_PRESETS.map((rate) => (
+                        <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                          <input
+                            type="radio"
+                            name="reducePositionFeeRate"
+                            checked={reducePositionFeePreset === rate}
+                            onChange={() => { setReducePositionFeePreset(rate); setReducePositionFeeCustom(''); }}
+                            style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }}
+                          />
+                          <span style={{ color: 'var(--text-main)' }}>{rate}%</span>
+                        </label>
+                      ))}
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}>
+                        <input
+                          type="radio"
+                          name="reducePositionFeeRate"
+                          checked={reducePositionFeePreset === 'custom'}
+                          onChange={() => setReducePositionFeePreset('custom')}
+                          style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ color: 'var(--text-main)' }}>自定义</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          placeholder="%"
+                          value={reducePositionFeePreset === 'custom' ? reducePositionFeeCustom : ''}
+                          onChange={(e) => { setReducePositionFeePreset('custom'); setReducePositionFeeCustom(e.target.value); }}
+                          onFocus={() => setReducePositionFeePreset('custom')}
+                          disabled={reducePositionFeePreset !== 'custom'}
+                          style={{ width: 64, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
+                        />
+                        <span style={{ color: 'var(--text-dim)' }}>%</span>
                       </label>
-                    ))}
+                    </div>
                   </div>
                   {reducePositionUnits && reducePositionTime && (
                     <div style={{ marginTop: 8, color: 'var(--text-dim)' }}>
                       {(() => {
+                        const feeRate = getReducePositionFeeRate();
                         const units = parseFloat(reducePositionUnits) || 0;
                         const netValue = parseNetValue(reducePositionRow.netValue) || 1;
                         const oldUnits = toNum(reducePositionRow.holding_units);
                         const oldCost = toNum(reducePositionRow.cost_per_unit) || 1;
                         const oldHoldingAmount = oldUnits * oldCost;
-                        const reduceAmount = units * netValue + units * netValue * reducePositionFeeRate / 100;
+                        const reduceAmount = units * netValue + units * netValue * feeRate / 100;
                         const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
                         const amount = units * netValue;
-                        const fee = amount * reducePositionFeeRate / 100;
+                        const fee = amount * feeRate / 100;
                         return (
                           <>
                             <div>同步减仓金额：¥{amount.toFixed(2)}</div>
-                            {reducePositionFeeRate > 0 && (
+                            {feeRate > 0 && (
                               <div style={{ marginTop: 4 }}>手续费：¥{fee.toFixed(2)}</div>
                             )}
                             <div className="position-modal-value" style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
