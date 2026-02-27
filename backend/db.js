@@ -202,6 +202,15 @@ async function initDb() {
     /* 表不存在时忽略 */
   }
 
+  // 迁移：为 api_keys 表添加 bind_user_id 字段
+  try {
+    const info = wrapper.prepare('PRAGMA table_info(api_keys)').all();
+    const hasBindUserId = info.some((col) => col.name === 'bind_user_id');
+    if (!hasBindUserId) wrapper.exec('ALTER TABLE api_keys ADD COLUMN bind_user_id INTEGER');
+  } catch (e) {
+    /* 表不存在时忽略 */
+  }
+
   const bcrypt = require('bcryptjs');
   const adminHash = bcrypt.hashSync('admin', 10);
   const exists = wrapper.prepare('SELECT id FROM users WHERE username = ?').get('admin');

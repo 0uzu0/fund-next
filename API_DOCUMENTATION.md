@@ -59,6 +59,7 @@ X-API-Key: your_api_key_here
 | `INVALID_API_KEY` | 401 | API Key 无效或已吊销 |
 | `RATE_LIMIT_EXCEEDED` | 429 | 请求频率超限 |
 | `INSUFFICIENT_PERMISSIONS` | 403 | 权限不足 |
+| `NO_USER_BOUND` | 403 | API Key 未绑定用户，无法访问用户数据 |
 | `INTERNAL_ERROR` | 500 | 服务器内部错误 |
 
 ---
@@ -73,6 +74,30 @@ X-API-Key: your_api_key_here
   X-RateLimit-Remaining: 95
   X-RateLimit-Reset: 1704067200
   ```
+
+---
+
+## 目录
+
+- [认证方式](#认证方式)
+- [通用响应格式](#通用响应格式)
+- [限流规则](#限流规则)
+- [API 端点](#api-端点)
+  - [1. 基金搜索建议](#1-基金搜索建议)
+  - [2. 获取基金实时数据](#2-获取基金实时数据)
+  - [3. 获取基金历史净值](#3-获取基金历史净值)
+  - [4. 获取市场指数](#4-获取市场指数)
+  - [5. 获取行业板块数据](#5-获取行业板块数据)
+  - [6. 获取贵金属价格](#6-获取贵金属价格)
+  - [7. 获取基金基本信息](#7-获取基金基本信息)
+  - [8. 获取用户持仓数据（需绑定用户）](#8-获取用户持仓数据需绑定用户)
+  - [9. 获取用户交易记录（需绑定用户）](#9-获取用户交易记录需绑定用户)
+- [使用流程：API Key 绑定用户获取持仓数据](#使用流程api-key-绑定用户获取持仓数据)
+- [SDK 示例](#sdk-示例)
+- [最佳实践](#最佳实践)
+- [安全建议](#安全建议)
+- [更新日志](#更新日志)
+- [技术支持](#技术支持)
 
 ---
 
@@ -338,6 +363,226 @@ GET /public/fund/info?code={fund_code}
 
 ---
 
+### 8. 获取用户持仓数据（需绑定用户）
+
+获取 API Key 绑定的用户的基金持仓数据。此接口需要 API Key 在创建时绑定具体用户。
+
+```http
+GET /public/user/portfolio
+```
+
+#### 前置条件
+
+1. 管理员在创建 API Key 时必须选择绑定用户
+2. 该用户必须在系统中持有基金
+
+#### 响应示例
+
+**成功响应：**
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": 2,
+    "username": "zhangsan",
+    "holdings": [
+      {
+        "code": "000001",
+        "name": "华夏成长混合",
+        "shares": 1000.5,
+        "holding_units": 1000.5,
+        "cost_per_unit": 1.2345,
+        "stored_holding_profit": 123.45,
+        "is_hold": true,
+        "chart_default": false,
+        "quote": {
+          "nav": 1.3456,
+          "acc_nav": 3.5678,
+          "daily_return": 2.35,
+          "date": "2024-01-15",
+          "update_time": "2024-01-15 15:00:00"
+        },
+        "calculated": {
+          "current_value": 1345.60,
+          "cost_value": 1234.50,
+          "profit": 111.10,
+          "profit_rate": 9.00
+        }
+      }
+    ],
+    "summary": {
+      "total_funds": 5,
+      "valid_quotes": 5,
+      "total_value": 12345.67,
+      "total_cost": 11234.56,
+      "total_profit": 1111.11,
+      "profit_rate": 9.89
+    }
+  }
+}
+```
+
+**未绑定用户错误：**
+```json
+{
+  "error": "no_user_bound",
+  "message": "该API Key未绑定用户，无法访问持仓数据"
+}
+```
+
+#### 字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| user_id | number | 用户ID |
+| username | string | 用户名 |
+| holdings | array | 持仓基金列表 |
+| holdings[].code | string | 基金代码 |
+| holdings[].name | string | 基金名称 |
+| holdings[].shares | number | 持有份额 |
+| holdings[].cost_per_unit | number | 成本单价 |
+| holdings[].quote | object | 实时行情数据 |
+| holdings[].calculated | object | 计算后的盈亏数据 |
+| summary | object | 汇总统计信息 |
+
+---
+
+### 9. 获取用户交易记录（需绑定用户）
+
+获取 API Key 绑定的用户的基金交易记录。
+
+```http
+GET /public/user/position-records?limit=50&offset=0
+```
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| limit | number | 否 | 50 | 返回记录数量限制（最大100） |
+| offset | number | 否 | 0 | 分页偏移量 |
+
+#### 响应示例
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": 2,
+    "username": "zhangsan",
+    "records": [
+      {
+        "id": 1,
+        "fund_code": "000001",
+        "fund_name": "华夏成长混合",
+        "operation": "buy",
+        "amount": 1000,
+        "units": 812.35,
+        "trade_date": "2024-01-15",
+        "period": " afternoon",
+        "holding_before": {
+          "units": 0,
+          "cost_per_unit": 0
+        },
+        "holding_after": {
+          "units": 812.35,
+          "cost_per_unit": 1.2309
+        },
+        "created_at": "2024-01-15T14:30:00+08:00"
+      }
+    ],
+    "pagination": {
+      "total": 128,
+      "limit": 50,
+      "offset": 0,
+      "has_more": true
+    }
+  }
+}
+```
+
+---
+
+## 使用流程：API Key 绑定用户获取持仓数据
+
+### 步骤 1：管理员创建 API Key 并绑定用户
+
+```bash
+# 管理员登录后，调用管理接口创建 API Key
+curl -X POST https://your-domain/api/admin/api-keys \
+  -H "Content-Type: application/json" \
+  -H "Cookie: connect.sid=your_session_cookie" \
+  -d '{
+    "name": "我的投资App",
+    "permissions": "read",
+    "bindUserId": 2
+  }'
+```
+
+**响应：**
+```json
+{
+  "success": true,
+  "data": {
+    "api_key": "ak_a1b2c3d4e5f6...",
+    "name": "我的投资App",
+    "permissions": "read",
+    "bind_user_id": 2
+  }
+}
+```
+
+> **重要**：`api_key` 只显示一次，请立即复制保存！
+
+### 步骤 2：使用 API Key 获取持仓数据
+
+```javascript
+const API_KEY = 'ak_a1b2c3d4e5f6...';
+
+// 获取持仓数据
+async function getPortfolio() {
+  const response = await fetch('https://your-domain/api/v1/public/user/portfolio', {
+    headers: {
+      'X-API-Key': API_KEY
+    }
+  });
+  
+  const data = await response.json();
+  
+  if (data.success) {
+    console.log('持仓基金:', data.data.holdings);
+    console.log('汇总信息:', data.data.summary);
+  } else {
+    console.error('获取失败:', data.message);
+  }
+}
+
+getPortfolio();
+```
+
+### 步骤 3：处理响应数据
+
+```javascript
+// 计算总收益率
+function calculateTotalReturn(summary) {
+  return {
+    totalValue: summary.total_value,
+    totalCost: summary.total_cost,
+    totalProfit: summary.total_profit,
+    profitRate: summary.profit_rate
+  };
+}
+
+// 获取涨幅最大的基金
+function getTopGainer(holdings) {
+  return holdings
+    .filter(h => h.calculated)
+    .sort((a, b) => b.calculated.profit_rate - a.calculated.profit_rate)[0];
+}
+```
+
+---
+
 ## SDK 示例
 
 ### JavaScript / Node.js
@@ -368,10 +613,63 @@ async function getFundRealtime(codes) {
   }
 }
 
-// 使用示例
-getFundRealtime(['000001', '000011'])
-  .then(data => console.log(data))
-  .catch(err => console.error(err));
+// 获取用户持仓数据（需要 API Key 绑定用户）
+async function getUserPortfolio() {
+  try {
+    const response = await client.get('/public/user/portfolio');
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// 获取用户交易记录
+async function getUserRecords(limit = 50, offset = 0) {
+  try {
+    const response = await client.get('/public/user/position-records', {
+      params: { limit, offset }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('API Error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+// 使用示例：获取持仓数据并计算收益
+async function analyzePortfolio() {
+  try {
+    const portfolio = await getUserPortfolio();
+    
+    if (!portfolio.success) {
+      console.error('获取持仓失败:', portfolio.message);
+      return;
+    }
+    
+    const { holdings, summary } = portfolio.data;
+    
+    console.log('=== 持仓汇总 ===');
+    console.log(`总基金数: ${summary.total_funds}`);
+    console.log(`总市值: ¥${summary.total_value.toFixed(2)}`);
+    console.log(`总成本: ¥${summary.total_cost.toFixed(2)}`);
+    console.log(`总收益: ¥${summary.total_profit.toFixed(2)}`);
+    console.log(`收益率: ${summary.profit_rate.toFixed(2)}%`);
+    
+    console.log('\n=== 持仓明细 ===');
+    holdings.forEach(h => {
+      const calc = h.calculated;
+      console.log(`${h.code} - ${h.name}`);
+      console.log(`  份额: ${h.holding_units}, 成本价: ¥${h.cost_per_unit}`);
+      console.log(`  现价: ¥${h.quote?.nav}, 收益: ¥${calc?.profit} (${calc?.profit_rate}%)`);
+    });
+    
+  } catch (err) {
+    console.error('分析失败:', err.message);
+  }
+}
+
+analyzePortfolio();
 ```
 
 ### Python
@@ -397,12 +695,59 @@ def get_fund_realtime(codes):
     response.raise_for_status()
     return response.json()
 
-# 使用示例
-try:
-    data = get_fund_realtime(['000001', '000011'])
-    print(data)
-except requests.exceptions.RequestException as e:
-    print(f'Error: {e}')
+# 获取用户持仓数据（需要 API Key 绑定用户）
+def get_user_portfolio():
+    response = requests.get(
+        f'{BASE_URL}/public/user/portfolio',
+        headers=headers
+    )
+    response.raise_for_status()
+    return response.json()
+
+# 获取用户交易记录
+def get_user_records(limit=50, offset=0):
+    params = {'limit': limit, 'offset': offset}
+    response = requests.get(
+        f'{BASE_URL}/public/user/position-records',
+        headers=headers,
+        params=params
+    )
+    response.raise_for_status()
+    return response.json()
+
+# 使用示例：分析持仓数据
+def analyze_portfolio():
+    try:
+        portfolio = get_user_portfolio()
+        
+        if not portfolio.get('success'):
+            print(f"获取持仓失败: {portfolio.get('message')}")
+            return
+        
+        data = portfolio['data']
+        holdings = data['holdings']
+        summary = data['summary']
+        
+        print('=== 持仓汇总 ===')
+        print(f"总基金数: {summary['total_funds']}")
+        print(f"总市值: ¥{summary['total_value']:.2f}")
+        print(f"总成本: ¥{summary['total_cost']:.2f}")
+        print(f"总收益: ¥{summary['total_profit']:.2f}")
+        print(f"收益率: {summary['profit_rate']:.2f}%")
+        
+        print('\n=== 持仓明细 ===')
+        for h in holdings:
+            calc = h.get('calculated', {})
+            print(f"{h['code']} - {h['name']}")
+            print(f"  份额: {h['holding_units']}, 成本价: ¥{h['cost_per_unit']}")
+            if calc:
+                print(f"  现价: ¥{h.get('quote', {}).get('nav')}, "
+                      f"收益: ¥{calc.get('profit')} ({calc.get('profit_rate')}%)")
+        
+    except requests.exceptions.RequestException as e:
+        print(f'Error: {e}')
+
+analyze_portfolio()
 ```
 
 ### cURL
@@ -416,6 +761,16 @@ curl -X GET \
 # 获取市场指数
 curl -X GET \
   'https://your-domain/api/v1/public/market/indices' \
+  -H 'X-API-Key: your_api_key'
+
+# 获取用户持仓数据（需要 API Key 绑定用户）
+curl -X GET \
+  'https://your-domain/api/v1/public/user/portfolio' \
+  -H 'X-API-Key: your_api_key'
+
+# 获取用户交易记录
+curl -X GET \
+  'https://your-domain/api/v1/public/user/position-records?limit=50&offset=0' \
   -H 'X-API-Key: your_api_key'
 ```
 
@@ -508,8 +863,9 @@ const funds = await getFundData(['000001', '000011']);
 
 | 版本 | 日期 | 更新内容 |
 |------|------|----------|
-| v1.1.0 | 2024-01-20 | 新增用户持仓数据接口，支持 API Key 绑定用户 |
-| v1.0.0 | 2024-01-15 | 初始版本发布 |
+| v1.2.0 | 2024-02-27 | 新增 API Key 管理后台，支持创建/查看/吊销 API Key |
+| v1.1.0 | 2024-01-20 | 新增用户持仓数据接口 (`/public/user/portfolio`)，支持 API Key 绑定用户获取持仓基金数据 |
+| v1.0.0 | 2024-01-15 | 初始版本发布，提供基金查询、市场行情等基础接口 |
 
 ---
 

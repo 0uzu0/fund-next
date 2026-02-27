@@ -6,6 +6,8 @@ type PortfolioHeaderProps = {
   onDataSourceChange: (v: DataSourceOption) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  chartVisible?: boolean;
+  onChartVisibilityChange?: (visible: boolean) => void;
 };
 
 export default function PortfolioHeader({
@@ -13,6 +15,8 @@ export default function PortfolioHeader({
   onDataSourceChange,
   onRefresh,
   refreshing,
+  chartVisible = true,
+  onChartVisibilityChange,
 }: PortfolioHeaderProps) {
   return (
     <div className="portfolio-header">
@@ -42,6 +46,17 @@ export default function PortfolioHeader({
           <span className="refresh-icon" aria-hidden>🔄</span>
           <span>{refreshing ? '刷新中…' : '刷新'}</span>
         </button>
+        {onChartVisibilityChange && (
+          <button
+            type="button"
+            className={`chart-toggle-button${chartVisible ? '' : ' hidden'}`}
+            onClick={() => onChartVisibilityChange(!chartVisible)}
+            title={chartVisible ? '隐藏图表' : '显示图表'}
+          >
+            <span className="chart-toggle-icon" aria-hidden>{chartVisible ? '👁️' : '👁️‍🗨️'}</span>
+            <span>{chartVisible ? '隐藏图表' : '显示图表'}</span>
+          </button>
+        )}
       </h1>
     </div>
   );

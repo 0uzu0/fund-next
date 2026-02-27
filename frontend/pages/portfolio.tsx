@@ -59,6 +59,15 @@ export default function Portfolio() {
   const [chartTooltipPos, setChartTooltipPos] = useState<{ left: number; top: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  // 图表显示/隐藏状态
+  const [chartVisible, setChartVisible] = useState(() => {
+    // 从 localStorage 读取保存的状态，默认为 true
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('portfolio_chart_visible');
+      return saved === null ? true : saved === 'true';
+    }
+    return true;
+  });
   // 行情数据源（fund123 / 天天基金），需在 useChartData 之前声明
   const [dataSource, setDataSource] = useState<DataSourceOption>('fund123');
 
@@ -422,20 +431,28 @@ export default function Portfolio() {
         if (d.success) {
           setShowDeleteFundModal(false);
           setDeleteSelectedCodes([]);
-          // 清除图表数据缓存
-          clearCache('api/fund/chart-data');
-          clearCache('api/fund/chart-data/preload');
+          // 清除所有相关缓存（包括 fund-list）
+          clearCache('/api/portfolio');
+          clearCache('/api/fund/data');
+          clearCache('/api/fund/groups');
+          clearCache('/api/fund/chart-data');
+          clearCache('/fund-list');
           // 清除 sessionStorage 中的图表数据
           if (typeof window !== 'undefined') {
             sessionStorage.removeItem('fund_chart_preload_data');
             sessionStorage.removeItem('fund_chart_preload_timestamp');
           }
+          // 立即清空 fundList，强制重新加载
+          setFundList([]);
           // 如果被删除的基金包含当前选中的图表基金，重置图表基金
           if (chartFund && deleteSelectedCodes.includes(chartFund.code)) {
             setChartFund(null);
           }
-          fetchData();
-          fetchWatchlist();
+          // 延迟刷新数据，确保状态已更新
+          setTimeout(() => {
+            fetchData();
+            fetchWatchlist();
+          }, 100);
         }
       })
       .catch(() => toast.error('删除失败'))
@@ -1115,6 +1132,13 @@ export default function Portfolio() {
             }}
             onRefresh={onRefresh}
             refreshing={refreshing}
+            chartVisible={chartVisible}
+            onChartVisibilityChange={(visible) => {
+              setChartVisible(visible);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('portfolio_chart_visible', String(visible));
+              }
+            }}
           />
 
           {/* 免责声明 - 一比一样式 */}
@@ -1135,7 +1159,8 @@ export default function Portfolio() {
             </p>
           </div>
 
-          {/* 基金估值 */}
+          {/* 基金估值 - 可显示/隐藏 */}
+          {chartVisible && (
           <div style={{
             backgroundColor: 'var(--card-bg)',
             border: '1px solid var(--border)',
@@ -1694,6 +1719,7 @@ export default function Portfolio() {
               )}
             </div>
           </div>
+          )}
 
           {/* 导入/导出 */}
           <div className="file-operations" style={{

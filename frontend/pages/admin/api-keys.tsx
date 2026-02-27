@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { apiGet, apiPost, apiDelete, getApiBase } from '../../utils/apiClient';
+import { apiGet, apiPost, apiPut, apiDelete, getApiBase } from '../../utils/apiClient';
 import { toast } from '../../utils/toast';
 
 interface ApiKey {
@@ -115,7 +115,7 @@ export default function ApiKeysManagement() {
     try {
       const res = await apiPost<{
         success?: boolean;
-        api_key?: string;
+        data?: { api_key?: string };
         message?: string;
       }>(getApiBase() + '/api/admin/api-keys', {
         name: formData.name,
@@ -126,8 +126,12 @@ export default function ApiKeysManagement() {
         bindUserId: formData.bindUserId ? parseInt(formData.bindUserId) : undefined
       });
 
+      console.log('Create API Key response:', res); // 调试用
+
       if (res.success) {
-        setNewlyCreatedKey(res.api_key || null);
+        // 后端返回 { success: true, data: { api_key: 'xxx' } }
+        const apiKey = res.data?.api_key;
+        setNewlyCreatedKey(apiKey || null);
         setFormData({
           name: '',
           description: '',
@@ -136,8 +140,11 @@ export default function ApiKeysManagement() {
           expiresAt: '',
           bindUserId: ''
         });
-        loadData();
-        toast.success('API Key 创建成功');
+        // 延迟刷新数据，确保数据库已更新
+        setTimeout(() => {
+          loadData();
+        }, 500);
+        toast.success('API Key 创建成功' + (apiKey ? '，请复制保存' : ''));
       } else {
         toast.error(res.message || '创建失败');
       }
@@ -149,7 +156,7 @@ export default function ApiKeysManagement() {
 
   const handleToggle = async (id: number, currentActive: number) => {
     try {
-      const res = await apiPost<{ success?: boolean; message?: string }>(
+      const res = await apiPut<{ success?: boolean; message?: string }>(
         getApiBase() + `/api/admin/api-keys/${id}/toggle`,
         { active: !currentActive }
       );
@@ -463,27 +470,14 @@ export default function ApiKeysManagement() {
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                   <button
                     type="button"
+                    className="btn btn-secondary"
                     onClick={() => setShowCreateModal(false)}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'transparent',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: 4,
-                      cursor: 'pointer'
-                    }}
                   >
                     取消
                   </button>
                   <button
                     type="submit"
-                    style={{
-                      padding: '8px 16px',
-                      background: 'var(--accent)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 4,
-                      cursor: 'pointer'
-                    }}
+                    className="btn btn-primary"
                   >
                     创建
                   </button>
@@ -531,27 +525,14 @@ export default function ApiKeysManagement() {
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
                 <button
+                  className="btn btn-primary"
                   onClick={() => copyToClipboard(newlyCreatedKey)}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'var(--accent)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 4,
-                    cursor: 'pointer'
-                  }}
                 >
                   复制到剪贴板
                 </button>
                 <button
+                  className="btn btn-secondary"
                   onClick={() => setNewlyCreatedKey(null)}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'transparent',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: 4,
-                    cursor: 'pointer'
-                  }}
                 >
                   关闭
                 </button>

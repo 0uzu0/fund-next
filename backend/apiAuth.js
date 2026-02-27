@@ -194,13 +194,13 @@ function requirePermission(permission) {
 /**
  * 创建新的 API Key（管理员使用）
  */
-function createApiKey(name, description, userId, permissions = 'read', rateLimit = 100, expiresAt = null) {
+function createApiKey(name, description, userId, permissions = 'read', rateLimit = 100, expiresAt = null, bindUserId = null) {
   const key = generateApiKey();
   
   db.prepare(
-    `INSERT INTO api_keys (key, name, description, user_id, permissions, rate_limit, expires_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(key, name, description, userId, permissions, rateLimit, expiresAt);
+    `INSERT INTO api_keys (key, name, description, user_id, permissions, rate_limit, expires_at, bind_user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(key, name, description, userId, permissions, rateLimit, expiresAt, bindUserId);
   
   return key;
 }
@@ -211,10 +211,12 @@ function createApiKey(name, description, userId, permissions = 'read', rateLimit
 function getApiKeys(page = 1, pageSize = 20) {
   const offset = (page - 1) * pageSize;
   const rows = db.prepare(
-    `SELECT id, name, description, permissions, rate_limit, active, 
-            last_used_at, created_at, expires_at
-     FROM api_keys
-     ORDER BY created_at DESC
+    `SELECT k.id, k.name, k.description, k.permissions, k.rate_limit, k.active, 
+            k.last_used_at, k.created_at, k.expires_at, k.bind_user_id,
+            u.username as bind_username
+     FROM api_keys k
+     LEFT JOIN users u ON k.bind_user_id = u.id
+     ORDER BY k.created_at DESC
      LIMIT ? OFFSET ?`
   ).all(pageSize, offset);
   
