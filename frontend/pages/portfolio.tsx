@@ -684,11 +684,22 @@ export default function Portfolio() {
     setReducePositionTime(null);
   };
 
+  // 计算持有份额和成本单价
+  const calculateHoldingData = (holdingAmount: number, cumulativeProfit: number, netValue: number) => {
+    // 持有份额 = 持仓金额 / 昨日净值
+    const units = netValue > 0 ? holdingAmount / netValue : 0;
+    // 成本单价 = 昨日净值 - 累计收益 / 持有份额
+    const costPerUnit = units > 0 ? netValue - cumulativeProfit / units : netValue;
+    return { units, costPerUnit };
+  };
+
   const openEditHolding = (r: FundRow) => {
     setEditHoldingRow(r);
-    setEditHoldingUnits(Number(r.holding_units ?? 0).toFixed(2));
-    setEditCostPerUnit(Number(r.cost_per_unit ?? 1).toFixed(4));
-    setEditHoldingProfit(Number((r as any).holding_profit ?? 0).toFixed(2));
+    // 初始化持仓金额和累计收益
+    const currentHolding = (r.holding_units ?? 0) * (r.cost_per_unit ?? 1);
+    const currentCumulative = (r as any).holding_profit ?? 0;
+    setEditHoldingAmount(currentHolding.toFixed(2));
+    setEditCumulativeProfit(currentCumulative.toFixed(2));
     setEditHoldingError('');
   };
 
