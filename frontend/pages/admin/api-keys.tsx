@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { apiGet, apiPost, apiPut, apiDelete, getApiBase } from '../../utils/apiClient';
+import { apiGet, apiPost, apiPut, apiDelete, getApiBase, clearCache } from '../../utils/apiClient';
 import { toast } from '../../utils/toast';
 
 interface ApiKey {
@@ -61,6 +61,10 @@ export default function ApiKeysManagement() {
   const loadData = async () => {
     try {
       setLoading(true);
+      // 清除缓存确保获取最新数据
+      clearCache('/api/admin/api-keys');
+      clearCache('/api/admin/users');
+      
       const [keysRes, usersRes] = await Promise.all([
         apiGet<{ success?: boolean; data?: ApiKey[]; rows?: ApiKey[]; message?: string }>(
           getApiBase() + '/api/admin/api-keys',
@@ -72,9 +76,6 @@ export default function ApiKeysManagement() {
         )
       ]);
       
-      console.log('API Keys response:', keysRes); // 调试用
-      console.log('Users response:', usersRes); // 调试用
-      
       // 处理 API Keys 响应 - 后端返回 { success: true, data: [...], pagination: {...} }
       if (keysRes.success) {
         setApiKeys(keysRes.data || keysRes.rows || []);
@@ -83,15 +84,10 @@ export default function ApiKeysManagement() {
       }
       
       // 处理 Users 响应 - 后端返回 { success: true, data: [...] }
-      console.log('Users response debug:', JSON.stringify(usersRes, null, 2)); // 详细调试
       if (usersRes.success && usersRes.data) {
         setUsers(usersRes.data);
-        console.log('Users loaded count:', usersRes.data.length);
       } else {
-        console.error('获取用户列表失败 - 完整响应:', usersRes);
-        console.error('获取用户列表失败 - message:', usersRes.message);
-        console.error('获取用户列表失败 - success:', usersRes.success);
-        console.error('获取用户列表失败 - data:', usersRes.data);
+        console.error('获取用户列表失败:', usersRes.message);
       }
     } catch (error: any) {
       console.error('加载数据失败:', error);
@@ -126,12 +122,11 @@ export default function ApiKeysManagement() {
         bindUserId: formData.bindUserId ? parseInt(formData.bindUserId) : undefined
       });
 
-      console.log('Create API Key response:', res); // 调试用
-
       if (res.success) {
         // 后端返回 { success: true, data: { api_key: 'xxx' } }
         const apiKey = res.data?.api_key;
         setNewlyCreatedKey(apiKey || null);
+        // 重置表单
         setFormData({
           name: '',
           description: '',
@@ -140,10 +135,10 @@ export default function ApiKeysManagement() {
           expiresAt: '',
           bindUserId: ''
         });
-        // 延迟刷新数据，确保数据库已更新
-        setTimeout(() => {
-          loadData();
-        }, 500);
+        // 关闭创建弹窗
+        setShowCreateModal(false);
+        // 立即刷新数据
+        loadData();
         toast.success('API Key 创建成功' + (apiKey ? '，请复制保存' : ''));
       } else {
         toast.error(res.message || '创建失败');

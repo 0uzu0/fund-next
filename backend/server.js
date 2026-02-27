@@ -15,10 +15,7 @@ const compression = require('compression');
 const { initDb } = require('./db');
 const cache = require('./cache');
 const authRoutes = require('./routes/auth');
-const fundApi = require('./routes/fundApi');
 const aiRoutes = require('./routes/ai');
-const publicApiRoutes = require('./routes/publicApi');
-const apiAdminRoutes = require('./routes/apiAdmin');
 const chartDataScheduler = require('./services/chartDataScheduler');
 
 // 配置（生产环境必须设置 SESSION_SECRET）
@@ -75,10 +72,10 @@ app.get('/api/health', (req, res) => {
 });
 
 app.use(authRoutes);
-app.use(fundApi);
 app.use(aiRoutes);
-app.use(apiAdminRoutes);
-app.use(publicApiRoutes);
+app.use(require('./routes/fundApi'));
+app.use(require('./routes/apiAdmin'));
+app.use(require('./routes/publicApi'));
 
 // 前端静态与 SPA 回退（由 Next 构建输出）
 // 支持开发环境（../frontend/out）和生产环境（./frontend/out）
@@ -118,6 +115,14 @@ app.get('*', (req, res, next) => {
 initDb().then(() => {
   cache.prune();
   setInterval(() => cache.prune(), 60 * 60 * 1000);
+  
+  // 初始化数据源适配器（支持多数据源切换和故障转移）
+  try {
+    const { initDataSources } = require('./services/dataSourceAdapter');
+    initDataSources();
+  } catch (e) {
+    console.warn('[数据源] 适配器初始化失败，使用默认数据源:', e.message);
+  }
   
   // 定期清理旧的图表数据（保留2天）
   const db = require('./db');
