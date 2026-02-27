@@ -35,6 +35,36 @@ export function isEstimateStale(estimateDate: string | undefined): boolean {
   return String(estimateDate).trim() < today;
 }
 
+/**
+ * 获取昨天的日期字符串 YYYY-MM-DD
+ */
+export function getYesterdayStr(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 是否应显示实际收益/涨跌数据
+ * 规则：净值日期为今天或昨天时显示，持续到次日9:30前
+ * @param netValueDate 净值日期字符串（格式：YYYY-MM-DD 或 MM-DD）
+ */
+export function shouldShowActualData(netValueDate: string | undefined): boolean {
+  if (!netValueDate || String(netValueDate).trim() === '' || netValueDate === '—') return false;
+  const today = getTodayStr();
+  const yesterday = getYesterdayStr();
+  const dateStr = String(netValueDate).trim();
+  // 支持 YYYY-MM-DD 或 MM-DD 格式
+  if (dateStr === today || dateStr === yesterday) return true;
+  // 如果是 MM-DD 格式，补全年份后比较
+  if (/^\d{2}-\d{2}$/.test(dateStr)) {
+    const currentYear = new Date().getFullYear();
+    const fullDate = `${currentYear}-${dateStr}`;
+    if (fullDate === today || fullDate === yesterday) return true;
+  }
+  return false;
+}
+
 /** 从输入中解析基金代码（支持 "123456" 或 "123456 - 名称"） */
 export function parseCodeFromInput(val: string): string {
   const t = val.trim();

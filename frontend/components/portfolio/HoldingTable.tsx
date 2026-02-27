@@ -1,6 +1,6 @@
 import type { HoldingRow } from '../../types/portfolio';
 import { toNum, formatMoney, formatPct, formatYuan } from '../../lib/format';
-import { isEstimateStale } from '../../lib/portfolioHelpers';
+import { isEstimateStale, shouldShowActualData } from '../../lib/portfolioHelpers';
 
 export type HoldingSortState = { col: number; dir: 'asc' | 'desc' } | null;
 
@@ -99,9 +99,9 @@ export default function HoldingTable({
                 <td className={toNum(r.estAmount) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (isEstimateStale(r.estimateDate) ? '—' : formatMoney(r.estAmount))}</td>
                 <td className={toNum(r.estPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (isEstimateStale(r.estimateDate) ? '—' : formatPct(r.estPct))}</td>
                 <td className={toNum(r.actualAmount) >= 0 ? 'positive' : 'negative'}>{
-                  hideSensitiveValues ? '****' : (r.actualAmount != null && Number.isFinite(Number(r.actualAmount)) && toNum(r.actualAmount) !== 0 ? formatMoney(r.actualAmount) : '—')
+                  hideSensitiveValues ? '****' : (shouldShowActualData(r.netValueDate) && r.actualAmount != null && Number.isFinite(Number(r.actualAmount)) && toNum(r.actualAmount) !== 0 ? formatMoney(r.actualAmount) : '—')
                 }</td>
-                <td className={toNum(r.actualPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (toNum(r.actualPct) !== 0 ? formatPct(r.actualPct) : '—')}</td>
+                <td className={toNum(r.actualPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (shouldShowActualData(r.netValueDate) && toNum(r.actualPct) !== 0 ? formatPct(r.actualPct) : '—')}</td>
                 <td className={toNum(r.cumulative) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.cumulative)}</td>
                 <td>
                   <button type="button" className="btn btn-primary" style={{ padding: '6px 12px', marginRight: 8 }} onClick={() => onAddPosition(r)}>加仓</button>

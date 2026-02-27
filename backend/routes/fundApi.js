@@ -304,7 +304,7 @@ router.get('/api/fund/download', loginRequired, (req, res) => {
 // ---------- 持仓份额（加减仓时写入 position_records，与原项目一致）----------
 router.post('/api/fund/shares', loginRequired, (req, res) => {
   try {
-    const { code, holding_units, cost_per_unit, shares, record_op, amount, units, trade_date, period, fund_name } = req.body || {};
+    const { code, holding_units, cost_per_unit, holding_profit, shares, record_op, amount, units, trade_date, period, fund_name } = req.body || {};
     const c = String(code || '').trim();
     if (!c) return res.status(400).json({ success: false, message: '请提供基金代码' });
     const userId = getCurrentUserId(req);
@@ -321,6 +321,7 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
       holdingUnits = s;
       costPerUnit = 1;
     }
+    const holdingProfit = holding_profit != null ? Number(holding_profit) : null;
     const prevRow = db.prepare('SELECT id, holding_units, cost_per_unit, fund_name FROM user_funds WHERE user_id = ? AND fund_code = ?').get(userId, c);
     if (!prevRow) return res.status(400).json({ success: false, message: '更新失败，基金不存在' });
     const prevHoldingUnits = Number(prevRow.holding_units) || 0;
@@ -328,9 +329,16 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
     const prevFundName = (prevRow.fund_name || fund_name || '').trim() || String(fund_name || '');
 
     const isHold = holdingUnits > 0 ? 1 : 0;
-    db.prepare(
-      'UPDATE user_funds SET holding_units = ?, cost_per_unit = ?, shares = ?, is_hold = ? WHERE user_id = ? AND fund_code = ?'
-    ).run(holdingUnits, costPerUnit, holdingUnits * costPerUnit, isHold, userId, c);
+    // 如果提供了 holding_profit 则更新，否则保持原值
+    if (holdingProfit !== null && !isNaN(holdingProfit)) {
+      db.prepare(
+        'UPDATE user_funds SET holding_units = ?, cost_per_unit = ?, shares = ?, is_hold = ?, holding_profit = ? WHERE user_id = ? AND fund_code = ?'
+      ).run(holdingUnits, costPerUnit, holdingUnits * costPerUnit, isHold, holdingProfit, userId, c);
+    } else {
+      db.prepare(
+        'UPDATE user_funds SET holding_units = ?, cost_per_unit = ?, shares = ?, is_hold = ? WHERE user_id = ? AND fund_code = ?'
+      ).run(holdingUnits, costPerUnit, holdingUnits * costPerUnit, isHold, userId, c);
+    }
 
     if (record_op === 'add' || record_op === 'reduce') {
       const amt = amount != null ? Number(amount) : NaN;
@@ -636,7 +644,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       const g = ordered.find(gg => String(gg.id) === String(groupParam));
       if (g) codes = new Set(groupFundCodes(g).map(String));
     }
-    const fundRows = db.prepare('SELECT fund_code, fund_key, fund_name, sectors, shares, holding_units, cost_per_unit FROM user_funds WHERE user_id = ?').all(userId);
+    const fundRows = db.prepare('SELECT fund_code, fund_key, fund_name, sectors, shares, holding_units, cost_per_unit, holding_profit FROM user_funds WHERE user_id = ?').all(userId);
     const fundMapForSearch = {};
     const fundMapForHolding = {};
     for (const r of fundRows) {
@@ -644,6 +652,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       const sectors = r.sectors ? JSON.parse(r.sectors) : [];
       const holdingUnits = r.holding_units != null ? r.holding_units : r.shares;
       const costPerUnit = r.cost_per_unit != null ? r.cost_per_unit : 1;
+      const holdingProfit = r.holding_profit != null ? r.holding_profit : 0;
       fundMapForSearch[r.fund_code] = {
         fund_key: r.fund_key,
         fund_name: r.fund_name,
@@ -653,9 +662,11 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         shares: (holdingUnits || 0) * (costPerUnit || 1),
         holding_units: holdingUnits || 0,
         cost_per_unit: costPerUnit || 1,
+        holding_profit: holdingProfit || 0,
       };
     }
-    // 从减仓记录汇总每只基金的已实现收益，避免减仓后累计收益显示减少
+    // 注意：累计收益计算已改为 (昨日净值-持仓成本)*持有份额+持仓收益，不再依赖减仓记录
+    // 保留此代码段用于向后兼容，但不再用于累计收益计算
     let realizedByCode = {};
     try {
       const reduceRecords = db.prepare(
@@ -678,7 +689,8 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       for (const [code, r] of Object.entries(fundMapForHolding)) {
         const meta = fundRows.find(x => x.fund_code === code);
         const holding = (r.holding_units || 0) * (r.cost_per_unit || 1);
-        const realized = realizedByCode[code] || 0;
+        // 累计收益使用持仓收益字段，不再依赖减仓记录
+        const holdingProfit = r.holding_profit || 0;
         list.push({
           code: String(code),
           name: meta ? String(meta.fund_name) : `基金${code}`,
@@ -687,7 +699,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
           estPct: 0,
           actualAmount: 0,
           actualPct: 0,
-          cumulative: Number(realized),
+          cumulative: Number(holdingProfit),
           netValue: '—',
           nowTime: '—',
           dayOfGrowth: '—',
@@ -695,6 +707,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
           monthlyInfo: '—',
           holding_units: Number(r.holding_units) || 0,
           cost_per_unit: Number(r.cost_per_unit) || 1,
+          holding_profit: Number(holdingProfit),
           estimateDate: '',
         });
       }
@@ -743,11 +756,8 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         return pctB - pctA;
       });
       rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
-      // 累计收益 = 未实现收益（当前持仓） + 历史减仓的已实现收益
-      for (const row of rows) {
-        const realized = realizedByCode[row.code] || 0;
-        row.cumulative = Number(row.cumulative) + Number(realized);
-      }
+      // 累计收益已在 buildPositionRows 中计算完成：=(昨日净值-持仓成本)*持有份额+持仓收益
+      // 不再额外添加减仓记录的已实现收益，因为持仓收益字段已包含历史收益
       if (rows.length === 0 && Object.keys(fundMapForHolding).length > 0) {
         rows = buildFallbackRows();
       }

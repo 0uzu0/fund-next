@@ -155,7 +155,7 @@ async function searchCode(fundMap) {
 /**
  * 将 searchCode 结果与用户持仓合并，得到带持仓金额、预估收益、累计收益的行（与 Python calculate_position_summary 一致）
  * @param {Array<[string, string, string, string, string, string, string, string, string?]>} resultRows - searchCode 返回，第9项为估值日期 YYYY-MM-DD
- * @param {Record<string, { shares?: number, holding_units?: number, cost_per_unit?: number }>} fundMap - 用户基金与份额
+ * @param {Record<string, { shares?: number, holding_units?: number, cost_per_unit?: number, holding_profit?: number }>} fundMap - 用户基金与份额
  * @returns {Array<{ code: string, name: string, holding: number, estAmount: number, estPct: number, actualAmount: number, actualPct: number, cumulative: number }>}
  */
 function buildPositionRows(resultRows, fundMap) {
@@ -169,10 +169,12 @@ function buildPositionRows(resultRows, fundMap) {
     let shares = cache.shares || 0;
     let holdingUnits = cache.holding_units;
     let costPerUnit = cache.cost_per_unit;
+    let holdingProfit = cache.holding_profit || 0;
     if (holdingUnits == null) holdingUnits = shares;
     if (costPerUnit == null) costPerUnit = 1;
     holdingUnits = Number(holdingUnits) || 0;
     costPerUnit = Number(costPerUnit) || 1;
+    holdingProfit = Number(holdingProfit) || 0;
     // 不再跳过 0 持仓，使新添加的自选基金也能出现在列表中
 
     let netValue = 0;
@@ -204,10 +206,13 @@ function buildPositionRows(resultRows, fundMap) {
 
     const positionValue = holdingUnits * netValue;
     const estAmount = (positionValue * estimatedGrowth) / 100;
-    const actualAmount = netValueDate === today ? (positionValue * dayGrowth) / 100 : 0;
-    const actualPct = netValueDate === today ? dayGrowth : 0;
-    // 累计收益 = (净值 - 持仓成本) × 持有份额；仅当净值有效时计算，否则为 0（与原项目 assets.py 一致）
-    const cumulative = netValueValid ? (netValue - costPerUnit) * holdingUnits : 0;
+    // 实际收益和涨跌显示持续到次日9:30前：只要净值日期是今天或昨天就显示
+    const isActualValid = netValueDate === today || netValueDate === getYesterdayStr();
+    const actualAmount = isActualValid ? (positionValue * dayGrowth) / 100 : 0;
+    const actualPct = isActualValid ? dayGrowth : 0;
+    // 累计收益 = (昨日净值 - 持仓成本) × 持有份额 + 持仓收益
+    // 注意：这里使用当前净值作为昨日净值计算，因为获取的是最新净值
+    const cumulative = netValueValid ? (netValue - costPerUnit) * holdingUnits + holdingProfit : holdingProfit;
 
     rows.push({
       code: String(code),
@@ -225,11 +230,20 @@ function buildPositionRows(resultRows, fundMap) {
       monthlyInfo: String(monthlyInfo || '').trim() || '—',
       holding_units: Number(holdingUnits),
       cost_per_unit: Number(costPerUnit),
+      holding_profit: Number(holdingProfit),
       estimateDate,
+      netValueDate: netValueDate || '',
     });
   }
 
   return rows;
+}
+
+/** 获取昨天的日期字符串 YYYY-MM-DD */
+function getYesterdayStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 module.exports = {

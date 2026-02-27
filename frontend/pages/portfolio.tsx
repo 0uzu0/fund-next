@@ -88,8 +88,8 @@ export default function Portfolio() {
   const [showDeleteGroupModal, setShowDeleteGroupModal] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<number | null>(null);
   const [editHoldingRow, setEditHoldingRow] = useState<FundRow | null>(null);
-  const [editHoldingUnits, setEditHoldingUnits] = useState('');
-  const [editCostPerUnit, setEditCostPerUnit] = useState('');
+  const [editHoldingAmount, setEditHoldingAmount] = useState('');
+  const [editCumulativeProfit, setEditCumulativeProfit] = useState('');
   const [editHoldingLoading, setEditHoldingLoading] = useState(false);
   const [editHoldingError, setEditHoldingError] = useState('');
   const [detailRow, setDetailRow] = useState<FundRow | null>(null);
@@ -688,27 +688,39 @@ export default function Portfolio() {
     setEditHoldingRow(r);
     setEditHoldingUnits(Number(r.holding_units ?? 0).toFixed(2));
     setEditCostPerUnit(Number(r.cost_per_unit ?? 1).toFixed(4));
+    setEditHoldingProfit(Number((r as any).holding_profit ?? 0).toFixed(2));
     setEditHoldingError('');
   };
 
   const onSaveEditHolding = async () => {
     if (!editHoldingRow) return;
-    const units = parseFloat(editHoldingUnits);
-    const cost = parseFloat(editCostPerUnit);
-    if (isNaN(units) || units < 0 || isNaN(cost) || cost < 0) {
-      setEditHoldingError('请输入有效的份额和成本单价（非负数）');
+    const holdingAmount = parseFloat(editHoldingAmount);
+    const cumulativeProfit = parseFloat(editCumulativeProfit);
+    if (isNaN(holdingAmount) || holdingAmount < 0 || isNaN(cumulativeProfit)) {
+      setEditHoldingError('请输入有效的持仓金额和累计收益');
       return;
     }
+
+    // 获取昨日净值用于计算
+    const netValue = parseNetValue(editHoldingRow.netValue) || 1;
+    const { units, costPerUnit } = calculateHoldingData(holdingAmount, cumulativeProfit, netValue);
+
+    if (units <= 0 || costPerUnit <= 0) {
+      setEditHoldingError('计算结果无效，请检查输入值');
+      return;
+    }
+
     setEditHoldingError('');
     setEditHoldingLoading(true);
     const unitsRounded = Math.round(units * 100) / 100;
-    const costRounded = Math.round(cost * 10000) / 10000;
+    const costRounded = Math.round(costPerUnit * 10000) / 10000;
+    const profitRounded = Math.round(cumulativeProfit * 100) / 100;
     try {
       const res = await fetch(`${API}/api/fund/shares`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ code: editHoldingRow.code, holding_units: unitsRounded, cost_per_unit: costRounded }),
+        body: JSON.stringify({ code: editHoldingRow.code, holding_units: unitsRounded, cost_per_unit: costRounded, holding_profit: profitRounded }),
       });
       const d = await res.json();
       if (d.success) {
@@ -755,13 +767,14 @@ export default function Portfolio() {
     
     const oldUnits = toNum(addPositionRow.holding_units);
     const oldCost = toNum(addPositionRow.cost_per_unit) || 1;
-    
+    const oldCumulativeProfit = toNum((addPositionRow as any).holding_profit);
+
     // 计算手续费（含预设与自定义费率）
     const addFeeRate = getAddPositionFeeRate();
     const fee = amount * addFeeRate / 100;
     // 实际买入金额（扣除手续费后）
     const actualAmount = amount - fee;
-    
+
     // 新增份额 = 实际买入金额 / 净值（提交时持有份额保留2位、成本单价保留4位小数）
     const addUnits = actualAmount / netValue;
     const newUnitsRaw = oldUnits + addUnits;
@@ -770,7 +783,11 @@ export default function Portfolio() {
     const newHoldingAmount = oldHoldingAmount + actualAmount;
     const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : oldCost;
     const newCost = Math.round(newCostRaw * 10000) / 10000;
-    
+
+    // 加仓时累计收益不变（因为加仓不影响已实现收益）
+    // 新的累计收益 = 旧的累计收益
+    const newCumulativeProfit = oldCumulativeProfit;
+
     setAddPositionLoading(true);
     try {
       const res = await fetch(`${API}/api/fund/shares`, {
@@ -781,6 +798,7 @@ export default function Portfolio() {
           code: addPositionRow.code,
           holding_units: newUnits,
           cost_per_unit: newCost,
+          holding_profit: newCumulativeProfit,
           record_op: 'add',
           amount, // 已买入金额（用于记录显示）
           fee_rate: addFeeRate, // 买入费率（预设或自定义）
@@ -841,6 +859,7 @@ export default function Portfolio() {
     
     const oldUnits = toNum(reducePositionRow.holding_units);
     const oldCost = toNum(reducePositionRow.cost_per_unit) || 1;
+    const oldCumulativeProfit = toNum((reducePositionRow as any).holding_profit);
     if (reduceUnits > oldUnits) {
       toast.error('同步减仓份额不能大于当前持有份额');
       return;
@@ -848,17 +867,21 @@ export default function Portfolio() {
     let newUnitsRaw = Math.max(0, oldUnits - reduceUnits);
     if (newUnitsRaw < 1e-6) newUnitsRaw = 0;
     const newUnits = Math.round(newUnitsRaw * 100) / 100; // 持有份额保留2位小数
-    
+
     const reduceFeeRate = getReducePositionFeeRate();
     const reduceAmount = reduceUnits * netValue + reduceUnits * netValue * reduceFeeRate / 100;
     const oldHoldingAmount = oldUnits * oldCost;
     const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
     const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : 1;
     const newCost = Math.round(newCostRaw * 10000) / 10000; // 成本单价保留4位小数
-    
+
+    // 减仓时更新累计收益
+    // 新的累计收益 = (昨日净值 - 新的成本单价) * 新的持有份额
+    const newCumulativeProfit = newUnits > 0 ? (netValue - newCost) * newUnits : 0;
+
     // 记录中的持仓金额（用于显示）
     const amount = reduceUnits * netValue;
-    
+
     setReducePositionLoading(true);
     try {
       const res = await fetch(`${API}/api/fund/shares`, {
@@ -869,6 +892,7 @@ export default function Portfolio() {
           code: reducePositionRow.code,
           holding_units: newUnits,
           cost_per_unit: newCost,
+          holding_profit: newCumulativeProfit,
           record_op: 'reduce',
           amount, // 持仓金额（用于记录显示）
           units: reduceUnits, // 减仓份额
@@ -1754,10 +1778,22 @@ export default function Portfolio() {
           <EditHoldingModal
             row={editHoldingRow}
             onClose={() => setEditHoldingRow(null)}
-            units={editHoldingUnits}
-            costPerUnit={editCostPerUnit}
-            onUnitsChange={setEditHoldingUnits}
-            onCostPerUnitChange={setEditCostPerUnit}
+            holdingAmount={editHoldingAmount}
+            cumulativeProfit={editCumulativeProfit}
+            onHoldingAmountChange={setEditHoldingAmount}
+            onCumulativeProfitChange={setEditCumulativeProfit}
+            calculatedUnits={(() => {
+              const amount = parseFloat(editHoldingAmount) || 0;
+              const profit = parseFloat(editCumulativeProfit) || 0;
+              const netValue = editHoldingRow ? parseNetValue(editHoldingRow.netValue) || 1 : 1;
+              return calculateHoldingData(amount, profit, netValue).units;
+            })()}
+            calculatedCostPerUnit={(() => {
+              const amount = parseFloat(editHoldingAmount) || 0;
+              const profit = parseFloat(editCumulativeProfit) || 0;
+              const netValue = editHoldingRow ? parseNetValue(editHoldingRow.netValue) || 1 : 1;
+              return calculateHoldingData(amount, profit, netValue).costPerUnit;
+            })()}
             error={editHoldingError}
             loading={editHoldingLoading}
             onSave={onSaveEditHolding}

@@ -106,6 +106,7 @@ async function initDb() {
       chart_default INTEGER DEFAULT 0,
       holding_units REAL DEFAULT 0,
       cost_per_unit REAL DEFAULT 1,
+      holding_profit REAL DEFAULT 0,
       UNIQUE (user_id, fund_code)
     );
     CREATE TABLE IF NOT EXISTS position_records (
@@ -156,6 +157,15 @@ async function initDb() {
     const info = wrapper.prepare('PRAGMA table_info(position_records)').all();
     const hasUnits = info.some((col) => col.name === 'units');
     if (!hasUnits) wrapper.exec('ALTER TABLE position_records ADD COLUMN units REAL');
+  } catch (e) {
+    /* 表不存在时忽略 */
+  }
+
+  // 迁移：为已存在的 user_funds 表补充 holding_profit 列
+  try {
+    const info = wrapper.prepare('PRAGMA table_info(user_funds)').all();
+    const hasHoldingProfit = info.some((col) => col.name === 'holding_profit');
+    if (!hasHoldingProfit) wrapper.exec('ALTER TABLE user_funds ADD COLUMN holding_profit REAL DEFAULT 0');
   } catch (e) {
     /* 表不存在时忽略 */
   }
