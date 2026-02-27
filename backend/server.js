@@ -89,10 +89,10 @@ app.use(express.static(frontendBuild));
 app.use(express.static(frontendPublic));
 
 // 未登录访问 /portfolio 等重定向到登录，并带上 return URL 便于登录后跳回
-app.get(['/', '/fund', '/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records'], (req, res, next) => {
+// 注意：登录页面和根路径不需要认证检查，避免重定向循环
+app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   if (!req.session || !req.session.user_id) {
-    if (req.path === '/login' || req.path === '/') return next();
     const redirect = encodeURIComponent(req.path);
     return res.redirect('/login?redirect=' + redirect);
   }
