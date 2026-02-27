@@ -11,16 +11,13 @@ const marketIndices = require('../services/marketIndices');
 const preciousMetals = require('../services/preciousMetals');
 const tiantianFund = require('../services/tiantianFund');
 
-// 所有公开 API 都需要 API Key
-router.use(apiKeyAuth);
-
 /**
  * @api {get} /api/v1/public/fund/search 搜索基金
  * @apiDescription 根据关键词搜索基金代码和名称
  * @apiParam {String} keyword 搜索关键词（基金代码或名称）
  * @apiParam {Number} [limit=10] 返回结果数量限制
  */
-router.get('/api/v1/public/fund/search', async (req, res) => {
+router.get('/api/v1/public/fund/search', apiKeyAuth, async (req, res) => {
   try {
     const { keyword, limit = 10 } = req.query;
     
@@ -56,7 +53,7 @@ router.get('/api/v1/public/fund/search', async (req, res) => {
  * @apiDescription 获取基金的最新净值、涨跌幅等实时数据
  * @apiParam {String} code 基金代码（多个用逗号分隔，最多10个）
  */
-router.get('/api/v1/public/fund/quote', async (req, res) => {
+router.get('/api/v1/public/fund/quote', apiKeyAuth, async (req, res) => {
   try {
     const { code } = req.query;
     
@@ -112,7 +109,7 @@ router.get('/api/v1/public/fund/quote', async (req, res) => {
  * @apiParam {String} code 基金代码
  * @apiParam {Number} [days=30] 获取天数（最大365）
  */
-router.get('/api/v1/public/fund/history', async (req, res) => {
+router.get('/api/v1/public/fund/history', apiKeyAuth, async (req, res) => {
   try {
     const { code, days = 30 } = req.query;
     
@@ -152,7 +149,7 @@ router.get('/api/v1/public/fund/history', async (req, res) => {
  * @api {get} /api/v1/public/market/sectors 获取行业板块数据
  * @apiDescription 获取各行业板块的涨跌幅情况
  */
-router.get('/api/v1/public/market/sectors', async (req, res) => {
+router.get('/api/v1/public/market/sectors', apiKeyAuth, async (req, res) => {
   try {
     const sectors = await sectorEastMoney.getSectorData();
     
@@ -180,7 +177,7 @@ router.get('/api/v1/public/market/sectors', async (req, res) => {
  * @api {get} /api/v1/public/market/indices 获取全球指数
  * @apiDescription 获取主要市场指数的实时行情
  */
-router.get('/api/v1/public/market/indices', async (req, res) => {
+router.get('/api/v1/public/market/indices', apiKeyAuth, async (req, res) => {
   try {
     const indices = await marketIndices.getGlobalIndices();
     
@@ -210,7 +207,7 @@ router.get('/api/v1/public/market/indices', async (req, res) => {
  * @api {get} /api/v1/public/market/precious-metals 获取贵金属价格
  * @apiDescription 获取黄金、白银等贵金属的实时价格
  */
-router.get('/api/v1/public/market/precious-metals', async (req, res) => {
+router.get('/api/v1/public/market/precious-metals', apiKeyAuth, async (req, res) => {
   try {
     const metals = await preciousMetals.getRealTimePrices();
     
@@ -240,7 +237,7 @@ router.get('/api/v1/public/market/precious-metals', async (req, res) => {
  * @api {get} /api/v1/public/time/beijing 获取北京时间
  * @apiDescription 获取当前北京时间（无需权限）
  */
-router.get('/api/v1/public/time/beijing', (req, res) => {
+router.get('/api/v1/public/time/beijing', apiKeyAuth, (req, res) => {
   const now = new Date();
   const beijingTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
   
@@ -258,7 +255,7 @@ router.get('/api/v1/public/time/beijing', (req, res) => {
  * @api {get} /api/v1/public/quota 查询配额使用情况
  * @apiDescription 查询当前 API Key 的配额使用情况
  */
-router.get('/api/v1/public/quota', (req, res) => {
+router.get('/api/v1/public/quota', apiKeyAuth, (req, res) => {
   // 从限流中间件获取的信息
   const rateLimit = res.getHeader('X-RateLimit-Limit');
   const remaining = res.getHeader('X-RateLimit-Remaining');
@@ -282,7 +279,7 @@ router.get('/api/v1/public/quota', (req, res) => {
  * @apiDescription 获取API Key绑定的用户的基金持仓数据（需要该Key绑定用户）
  * @apiPermission read
  */
-router.get('/api/v1/public/user/portfolio', async (req, res) => {
+router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
     
@@ -422,7 +419,7 @@ router.get('/api/v1/public/user/portfolio', async (req, res) => {
  * @apiParam {Number} [limit=50] 返回记录数量限制
  * @apiParam {Number} [offset=0] 分页偏移量
  */
-router.get('/api/v1/public/user/position-records', async (req, res) => {
+router.get('/api/v1/public/user/position-records', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
     
