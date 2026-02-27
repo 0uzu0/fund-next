@@ -1094,10 +1094,10 @@ router.get('/api/admin/users', loginRequired, adminRequired, (req, res) => {
       is_admin: Boolean(u.is_admin),
       created_at: u.created_at || '',
     }));
-    res.json({ users });
+    res.json({ success: true, data: users });
   } catch (e) {
     console.error('获取用户列表失败:', e.message);
-    res.status(500).json({ error: String(e.message) });
+    res.status(500).json({ success: false, message: String(e.message) });
   }
 });
 

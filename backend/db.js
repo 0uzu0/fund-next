@@ -150,6 +150,38 @@ async function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_fund_chart_date ON fund_chart_data(fund_code, date);
     CREATE INDEX IF NOT EXISTS idx_fund_chart_updated ON fund_chart_data(updated_at);
+    
+    -- API Key 管理表
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      user_id INTEGER,
+      permissions TEXT DEFAULT 'read', -- read, write, admin
+      rate_limit INTEGER DEFAULT 100, -- 每分钟请求限制
+      active INTEGER DEFAULT 1,
+      last_used_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+    CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(active);
+    
+    -- API 调用日志表
+    CREATE TABLE IF NOT EXISTS api_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      api_key_id INTEGER,
+      endpoint TEXT NOT NULL,
+      method TEXT NOT NULL,
+      ip_address TEXT,
+      status_code INTEGER,
+      response_time INTEGER, -- 毫秒
+      error_message TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_logs_key_id ON api_logs(api_key_id);
+    CREATE INDEX IF NOT EXISTS idx_api_logs_created ON api_logs(created_at);
   `);
 
   // 迁移：为已存在的 position_records 表补充 units 列（仅启动时执行一次，避免路由中重复检查）

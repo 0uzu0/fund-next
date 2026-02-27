@@ -26,21 +26,18 @@ function Sidebar() {
   const activeIconRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
-    // 检查缓存
-    if (adminCache && Date.now() - adminCache.timestamp < CACHE_DURATION) {
+    // 检查缓存，但如果是管理页面则强制刷新
+    const isAdminPage = pathname.startsWith('/admin');
+    if (!isAdminPage && adminCache && Date.now() - adminCache.timestamp < CACHE_DURATION) {
       setIsAdmin(adminCache.isAdmin);
       return;
     }
     
-    // 避免重复请求
-    if (hasFetched.current) return;
-    hasFetched.current = true;
-    
     // 使用 setTimeout 确保不会阻塞 UI
     setTimeout(() => {
-      // 使用 API 客户端，带缓存（5分钟）
+      // 使用 API 客户端检查管理员状态
       apiGet<{ is_admin?: boolean }>(`${API}/api/auth/me`, {
-        cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
+        cache: { ttl: 5 * 60 * 1000 },
       })
         .then((data) => {
           const admin = !!data.is_admin;
@@ -52,7 +49,7 @@ function Sidebar() {
           adminCache = { isAdmin: false, timestamp: Date.now() };
         });
     }, 0);
-  }, []);
+  }, [pathname]); // 监听 pathname 变化，切换页面时重新检查
 
   // 移动端：路由变化后把当前选中项滚动到可见区域
   useEffect(() => {
@@ -68,7 +65,7 @@ function Sidebar() {
   }, [pathname]);
 
   const isAdminActive = useMemo(() => {
-    return pathname === '/admin/users' || pathname === '/admin/profile';
+    return pathname.startsWith('/admin');
   }, [pathname]);
 
   const setActiveRef = (el: HTMLAnchorElement | null, active: boolean) => {
@@ -91,16 +88,28 @@ function Sidebar() {
         </Link>
       ))}
       {isAdmin && (
-        <Link
-          href="/admin/users"
-          ref={(el) => setActiveRef(el, isAdminActive)}
-          className={`sidebar-icon ${isAdminActive ? 'active' : ''}`}
-          title="用户管理"
-          aria-current={isAdminActive ? 'page' : undefined}
-        >
-          <span className="icon">👤</span>
-          <span className="sidebar-label" aria-hidden="true">用户管理</span>
-        </Link>
+        <>
+          <Link
+            href="/admin/users"
+            ref={(el) => setActiveRef(el, pathname === '/admin/users')}
+            className={`sidebar-icon ${pathname === '/admin/users' ? 'active' : ''}`}
+            title="用户管理"
+            aria-current={pathname === '/admin/users' ? 'page' : undefined}
+          >
+            <span className="icon">👤</span>
+            <span className="sidebar-label" aria-hidden="true">用户管理</span>
+          </Link>
+          <Link
+            href="/admin/api-keys"
+            ref={(el) => setActiveRef(el, pathname === '/admin/api-keys')}
+            className={`sidebar-icon ${pathname === '/admin/api-keys' ? 'active' : ''}`}
+            title="API密钥"
+            aria-current={pathname === '/admin/api-keys' ? 'page' : undefined}
+          >
+            <span className="icon">🔑</span>
+            <span className="sidebar-label" aria-hidden="true">API密钥</span>
+          </Link>
+        </>
       )}
     </aside>
   );

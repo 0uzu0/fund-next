@@ -422,7 +422,18 @@ export default function Portfolio() {
         if (d.success) {
           setShowDeleteFundModal(false);
           setDeleteSelectedCodes([]);
-          clearCache('portfolio/table');
+          // 清除图表数据缓存
+          clearCache('api/fund/chart-data');
+          clearCache('api/fund/chart-data/preload');
+          // 清除 sessionStorage 中的图表数据
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('fund_chart_preload_data');
+            sessionStorage.removeItem('fund_chart_preload_timestamp');
+          }
+          // 如果被删除的基金包含当前选中的图表基金，重置图表基金
+          if (chartFund && deleteSelectedCodes.includes(chartFund.code)) {
+            setChartFund(null);
+          }
           fetchData();
           fetchWatchlist();
         }

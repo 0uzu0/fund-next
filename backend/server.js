@@ -17,6 +17,8 @@ const cache = require('./cache');
 const authRoutes = require('./routes/auth');
 const fundApi = require('./routes/fundApi');
 const aiRoutes = require('./routes/ai');
+const publicApiRoutes = require('./routes/publicApi');
+const apiAdminRoutes = require('./routes/apiAdmin');
 const chartDataScheduler = require('./services/chartDataScheduler');
 
 // 配置（生产环境必须设置 SESSION_SECRET）
@@ -75,6 +77,8 @@ app.get('/api/health', (req, res) => {
 app.use(authRoutes);
 app.use(fundApi);
 app.use(aiRoutes);
+app.use(apiAdminRoutes);
+app.use(publicApiRoutes);
 
 // 前端静态与 SPA 回退（由 Next 构建输出）
 // 支持开发环境（../frontend/out）和生产环境（./frontend/out）

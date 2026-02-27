@@ -25,13 +25,17 @@ export default function Login() {
     setError('');
     setLoading(true);
     try {
-      const data = await apiPost<{ success?: boolean; message?: string }>(
+      const data = await apiPost<{ success?: boolean; message?: string; is_admin?: boolean }>(
         getApiBase() + '/api/auth/login',
         { username: username.trim(), password, remember_me: rememberMe }
       );
       if (data.success) {
-        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
-        router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
+        // 所有用户都默认跳转到 portfolio，除非有重定向参数
+        const redirectParam = router.query.redirect;
+        let redirect = typeof redirectParam === 'string' && redirectParam ? redirectParam : '/portfolio';
+        
+        // 使用 window.location 进行硬跳转，确保页面完全刷新
+        window.location.href = redirect.startsWith('/') ? redirect : '/' + redirect;
       }
       else setError((data as { message?: string }).message || '登录失败');
     } catch (err) {
