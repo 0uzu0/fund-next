@@ -73,6 +73,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// 前端构建路径配置
+const frontendBuild = fs.existsSync(path.join(__dirname, 'frontend/out'))
+  ? path.join(__dirname, 'frontend/out')
+  : path.join(__dirname, '../frontend/out');
+console.log(`[Server] Frontend build path: ${frontendBuild}`);
+
+// 最先处理根路径和登录页面 - 避免被其他中间件拦截
+app.get('/', (req, res) => {
+  console.log(`[ROOT] Serving index.html`);
+  const filePath = path.join(frontendBuild, 'index.html');
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(500).send('Frontend not built');
+});
+
+app.get('/login', (req, res) => {
+  console.log(`[LOGIN] Serving login.html`);
+  const filePath = path.join(frontendBuild, 'login.html');
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(500).send('Frontend not built');
+});
+
 // 健康检查端点（无需认证）
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -134,35 +159,17 @@ app.use(aiRoutes);
 app.use(require('./routes/fundApi'));
 app.use(require('./routes/apiAdmin'));
 
-// 前端静态与 SPA 回退（由 Next 构建输出）
-// 支持开发环境（../frontend/out）和生产环境（./frontend/out）
-const frontendBuild = fs.existsSync(path.join(__dirname, 'frontend/out'))
-  ? path.join(__dirname, 'frontend/out')
-  : path.join(__dirname, '../frontend/out');
+// 前端静态资源服务
 const frontendPublic = fs.existsSync(path.join(__dirname, 'frontend/public'))
   ? path.join(__dirname, 'frontend/public')
   : path.join(__dirname, '../frontend/public');
 
-console.log(`[Server] Frontend build path: ${frontendBuild}`);
 console.log(`[Server] Frontend public path: ${frontendPublic}`);
-console.log(`[Server] Build exists: ${fs.existsSync(frontendBuild)}`);
 
-// 1. 首先处理根路径和登录页面（最高优先级）
-app.get(['/', '/login'], (req, res) => {
-  console.log(`[Root/Login] Serving ${req.path}`);
-  const targetFile = req.path === '/' ? 'index.html' : 'login.html';
-  const filePath = path.join(frontendBuild, targetFile);
-  console.log(`[Root/Login] File: ${filePath}, exists: ${fs.existsSync(filePath)}`);
-
-  if (fs.existsSync(filePath)) {
-    return res.sendFile(filePath);
-  }
-  res.status(500).send(`Frontend file ${targetFile} not found`);
-});
-
-// 2. 静态文件服务（CSS、JS、图片等）
+// 静态文件服务（CSS、JS、图片等）
 app.use('/_next', express.static(path.join(frontendBuild, '_next')));
 app.use(express.static(frontendPublic));
+app.use(express.static(frontendBuild, { index: false }));
 
 // 3. 认证保护的路由
 app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
