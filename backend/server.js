@@ -147,23 +147,26 @@ console.log(`[Server] Frontend build path: ${frontendBuild}`);
 console.log(`[Server] Frontend public path: ${frontendPublic}`);
 console.log(`[Server] Build exists: ${fs.existsSync(frontendBuild)}`);
 
-// 静态文件服务 - 添加调试和扩展名处理
-app.use((req, res, next) => {
-  if (req.path === '/login' || req.path.startsWith('/login')) {
-    console.log(`[Static] Bypassing static for ${req.path}`);
-    return next();
-  }
-  next();
-});
-app.use(express.static(frontendBuild, { index: false }));
-app.use(express.static(frontendPublic, { index: false }));
+// 1. 首先处理根路径和登录页面（最高优先级）
+app.get(['/', '/login'], (req, res) => {
+  console.log(`[Root/Login] Serving ${req.path}`);
+  const targetFile = req.path === '/' ? 'index.html' : 'login.html';
+  const filePath = path.join(frontendBuild, targetFile);
+  console.log(`[Root/Login] File: ${filePath}, exists: ${fs.existsSync(filePath)}`);
 
-// 未登录访问 /portfolio 等重定向到登录，并带上 return URL 便于登录后跳回
-// 注意：登录页面和根路径不需要认证检查，避免重定向循环
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+  res.status(500).send(`Frontend file ${targetFile} not found`);
+});
+
+// 2. 静态文件服务（CSS、JS、图片等）
+app.use('/_next', express.static(path.join(frontendBuild, '_next')));
+app.use(express.static(frontendPublic));
+
+// 3. 认证保护的路由
 app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
-  // 防止重定向循环：如果已经在登录页面或正在前往登录页面，不再重定向
-  if (req.path.startsWith('/login')) return next();
   if (!req.session || !req.session.user_id) {
     const redirect = encodeURIComponent(req.path);
     return res.redirect('/login?redirect=' + redirect);
@@ -171,40 +174,17 @@ app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/secto
   next();
 });
 
-// 处理根路径和登录页面 - 放在最前面避免被其他中间件拦截
-app.get(['/', '/login'], (req, res) => {
-  console.log(`[Root/Login] Serving ${req.path}`);
-  const targetFile = req.path === '/' ? 'index.html' : 'login.html';
-  const filePath = path.join(frontendBuild, targetFile);
-  console.log(`[Root/Login] Looking for: ${filePath}, exists: ${fs.existsSync(filePath)}`);
-
-  if (fs.existsSync(filePath)) {
-    return res.sendFile(filePath);
-  }
-  res.status(500).send(`前端文件 ${targetFile} 未找到，请先运行 npm run build`);
-});
-
-// Next 静态导出：优先返回对应 path 的 html 文件
+// 4. 其他页面路由
 app.get('*', (req, res, next) => {
-  console.log(`[SPA] Handling ${req.path}`);
+  if (req.path.startsWith('/api')) return next();
 
-  if (req.path.startsWith('/api') || req.path.startsWith('/_next')) {
-    console.log(`[SPA] Skipping API/static path`);
-    return next();
-  }
-
-  const hasExt = path.extname(req.path);
-  if (hasExt) {
-    console.log(`[SPA] Skipping file with extension`);
-    return next();
-  }
-
-  const base = req.path === '/' ? 'index' : req.path.slice(1).replace(/\//g, path.sep);
+  const base = req.path.slice(1).replace(/\//g, path.sep);
   const htmlPath = path.join(frontendBuild, base + '.html');
-  console.log(`[SPA] Looking for: ${htmlPath}, exists: ${fs.existsSync(htmlPath)}`);
-  if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath);
+  console.log(`[Page] ${req.path} -> ${htmlPath}, exists: ${fs.existsSync(htmlPath)}`);
 
-  console.log(`[SPA] No file found, passing to next handler`);
+  if (fs.existsSync(htmlPath)) {
+    return res.sendFile(htmlPath);
+  }
   next();
 });
 
