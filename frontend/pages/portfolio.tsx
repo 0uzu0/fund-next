@@ -15,6 +15,7 @@ import {
   getTodayStr,
   isEstimateStale,
   parseCodeFromInput,
+  parseNameFromInput,
   PENDING_ADD_KEY,
   PENDING_REDUCE_KEY,
   loadPendingAdds,
@@ -193,7 +194,7 @@ export default function Portfolio() {
       apiGet(`${API}/api/fund/data`, {
         cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
       }),
-      apiGet(`${API}/api/portfolio/fund-list`, {
+      apiGet(`${API}/api/portfolio/fund-list?_t=${Date.now()}`, {
         cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
       }),
       apiGet(`${API}/api/fund/groups`, {
@@ -219,8 +220,11 @@ export default function Portfolio() {
           todayActual,
           cumulative: cum,
         });
+      } else if (tableRes.success) {
+        // 即使没有数据也要清空 fundRows
+        setFundRows([]);
       }
-      if (listRes.success && listRes.funds && listRes.funds.length) {
+      if (listRes.success && listRes.funds) {
         setFundList(listRes.funds);
       }
       // 有持仓表格或 fund-list 时预加载图表数据，并设置默认选中基金
@@ -306,10 +310,10 @@ export default function Portfolio() {
     if (auth && !loading) fetchData();
   }, [auth, refreshing]);
 
-  const fetchWatchlist = useCallback((overrideSource?: 'fund123' | 'tiantian') => {
+  const fetchWatchlist = useCallback((overrideSource?: 'fund123' | 'tiantian', noCache?: boolean) => {
     if (selectedGroupId == null) return;
     const source = overrideSource ?? dataSource;
-    const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}`;
+    const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}${noCache ? `&_t=${Date.now()}` : ''}`;
     apiGet<{ success: boolean; rows?: FundRow[] }>(url, {
       cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` },
     })
@@ -442,17 +446,17 @@ export default function Portfolio() {
             sessionStorage.removeItem('fund_chart_preload_data');
             sessionStorage.removeItem('fund_chart_preload_timestamp');
           }
-          // 立即清空 fundList，强制重新加载
+          // 立即清空 fundList、fundRows 和 watchlistRows，强制重新加载
           setFundList([]);
+          setFundRows([]);
+          setWatchlistRows([]);
           // 如果被删除的基金包含当前选中的图表基金，重置图表基金
           if (chartFund && deleteSelectedCodes.includes(chartFund.code)) {
             setChartFund(null);
           }
-          // 延迟刷新数据，确保状态已更新
-          setTimeout(() => {
-            fetchData();
-            fetchWatchlist();
-          }, 100);
+          // 立即刷新数据（强制跳过缓存）
+          fetchData();
+          fetchWatchlist(undefined, true);
         }
       })
       .catch(() => toast.error('删除失败'))
@@ -555,8 +559,20 @@ export default function Portfolio() {
       const d = await r.json();
       if (d.success) {
         clearCache('portfolio/table');
+        clearCache('/api/portfolio/fund-list');
+        clearCache('/api/fund/chart-data');
+        clearCache('/api/fund/data');
+        // 清除 sessionStorage 中的图表数据
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('fund_chart_preload_data');
+          sessionStorage.removeItem('fund_chart_preload_timestamp');
+        }
+        // 立即清空 fundList、fundRows 和 watchlistRows，强制重新加载
+        setFundList([]);
+        setFundRows([]);
+        setWatchlistRows([]);
         fetchData();
-        fetchWatchlist();
+        fetchWatchlist(undefined, true);
       } else {
         toast.error(d.message || '移除失败');
       }
@@ -568,34 +584,40 @@ export default function Portfolio() {
   const onAddFund = async () => {
     const code = parseCodeFromInput(addInput);
     if (!code) {
-      setAddError('请输入基金代码');
+      toast.error('请输入基金代码');
       return;
     }
     if (selectedGroupId == null) {
-      setAddError('请先选择分组');
+      toast.error('请先选择分组');
       return;
     }
-    setAddError('');
+    // 从输入中解析基金名称（如果用户通过联想选择了基金）
+    const fundName = parseNameFromInput(addInput);
     setAddLoading(true);
     try {
       const r = await fetch(`${API}/api/fund/groups/${selectedGroupId}/funds`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, fund_name: fundName }),
       });
       const d = await r.json();
       if (d.success) {
         setAddInput('');
         setShowSuggestions(false);
         clearCache('portfolio/table');
+        clearCache('/api/portfolio/fund-list');
+        clearCache('/api/fund/data');
+        // 立即清空 fundList，强制重新加载
+        setFundList([]);
         fetchData();
         fetchWatchlist();
+        toast.success('添加成功');
       } else {
-        setAddError(d.message || '添加失败');
+        toast.error(d.message || '添加失败');
       }
     } catch (e) {
-      setAddError('网络错误');
+      toast.error('网络错误');
     } finally {
       setAddLoading(false);
     }
@@ -714,10 +736,10 @@ export default function Portfolio() {
 
   // 计算持有份额和成本单价
   const calculateHoldingData = (holdingAmount: number, cumulativeProfit: number, netValue: number) => {
-    // 持有份额 = 持仓金额 / 昨日净值
+    // 持有份额 = 持有金额 / 昨日净值
     const units = netValue > 0 ? holdingAmount / netValue : 0;
-    // 成本单价 = 昨日净值 - 累计收益 / 持有份额
-    const costPerUnit = units > 0 ? netValue - cumulativeProfit / units : netValue;
+    // 持仓成本 = 累计收益 / 持有份额 + 昨日净值
+    const costPerUnit = units > 0 ? cumulativeProfit / units + netValue : netValue;
     return { units, costPerUnit };
   };
 
@@ -764,6 +786,8 @@ export default function Portfolio() {
       const d = await res.json();
       if (d.success) {
         setEditHoldingRow(null);
+        clearCache('portfolio/table');
+        clearCache('/api/fund/data');
         fetchData();
         fetchWatchlist();
       } else {
@@ -818,14 +842,14 @@ export default function Portfolio() {
     const addUnits = actualAmount / netValue;
     const newUnitsRaw = oldUnits + addUnits;
     const newUnits = Math.round(newUnitsRaw * 100) / 100;
-    const oldHoldingAmount = oldUnits * oldCost;
-    const newHoldingAmount = oldHoldingAmount + actualAmount;
-    const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : oldCost;
-    const newCost = Math.round(newCostRaw * 10000) / 10000;
 
     // 加仓时累计收益不变（因为加仓不影响已实现收益）
-    // 新的累计收益 = 旧的累计收益
     const newCumulativeProfit = oldCumulativeProfit;
+
+    // 按照新公式计算持仓成本：持仓成本 = 累计收益 / 持有份额 + 昨日净值
+    // 但加仓时需要保持成本单价不变（加仓不改变原有份额的成本）
+    // 新的持仓成本 = 原持仓成本（加仓不改变成本单价）
+    const newCost = oldCost;
 
     setAddPositionLoading(true);
     try {
@@ -849,6 +873,8 @@ export default function Portfolio() {
       const d = await res.json();
       if (d.success) {
         clearCache('api/fund/position-records');
+        clearCache('portfolio/table');
+        clearCache('/api/fund/data');
         const settlementDate = addDaysToDate(buyDate, isAfter15 ? 2 : 1);
         const next = [...loadPendingAdds(), { fundCode: addPositionRow.code, amount, settlementDate }];
         try {
@@ -907,16 +933,12 @@ export default function Portfolio() {
     if (newUnitsRaw < 1e-6) newUnitsRaw = 0;
     const newUnits = Math.round(newUnitsRaw * 100) / 100; // 持有份额保留2位小数
 
-    const reduceFeeRate = getReducePositionFeeRate();
-    const reduceAmount = reduceUnits * netValue + reduceUnits * netValue * reduceFeeRate / 100;
-    const oldHoldingAmount = oldUnits * oldCost;
-    const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
-    const newCostRaw = newUnits > 0 ? (newHoldingAmount / newUnits) : 1;
-    const newCost = Math.round(newCostRaw * 10000) / 10000; // 成本单价保留4位小数
+    // 减仓时成本单价不变
+    const newCost = oldCost;
 
-    // 减仓时更新累计收益
-    // 新的累计收益 = (昨日净值 - 新的成本单价) * 新的持有份额
-    const newCumulativeProfit = newUnits > 0 ? (netValue - newCost) * newUnits : 0;
+    // 新的累计收益 = (持仓成本 - 昨日净值) × 新的持有份额
+    // 根据新公式：持仓成本 = 累计收益 / 持有份额 + 昨日净值，反推
+    const newCumulativeProfit = newUnits > 0 ? (newCost - netValue) * newUnits : 0;
 
     // 记录中的持仓金额（用于显示）
     const amount = reduceUnits * netValue;
@@ -944,6 +966,8 @@ export default function Portfolio() {
       const d = await res.json();
       if (d.success) {
         clearCache('api/fund/position-records');
+        clearCache('portfolio/table');
+        clearCache('/api/fund/data');
         setReducePositionRow(null);
         fetchData();
         fetchWatchlist();
@@ -1936,9 +1960,11 @@ export default function Portfolio() {
                           const actualAmount = inputAmount - fee;
                           if (addPositionTime) {
                             const oldUnits = toNum(addPositionRow.holding_units);
-                            const oldCost = toNum(addPositionRow.cost_per_unit) || 1;
-                            const oldHoldingAmount = oldUnits * oldCost;
-                            const newHoldingAmount = oldHoldingAmount + actualAmount;
+                            const netValue = parseNetValue(addPositionRow.netValue) || 1;
+                            const addUnits = actualAmount / netValue;
+                            const newUnits = oldUnits + addUnits;
+                            // 新持仓金额 = 新持有份额 × 昨日净值
+                            const newHoldingAmount = newUnits * netValue;
                             return (
                               <>
                                 <div>手续费：¥{fee.toFixed(2)}</div>
@@ -2093,12 +2119,11 @@ export default function Portfolio() {
                         const units = parseFloat(reducePositionUnits) || 0;
                         const netValue = parseNetValue(reducePositionRow.netValue) || 1;
                         const oldUnits = toNum(reducePositionRow.holding_units);
-                        const oldCost = toNum(reducePositionRow.cost_per_unit) || 1;
-                        const oldHoldingAmount = oldUnits * oldCost;
-                        const reduceAmount = units * netValue + units * netValue * feeRate / 100;
-                        const newHoldingAmount = Math.max(0, oldHoldingAmount - reduceAmount);
+                        const newUnits = Math.max(0, oldUnits - units);
                         const amount = units * netValue;
                         const fee = amount * feeRate / 100;
+                        // 持有金额 = 持有份额 × 昨日净值
+                        const newHoldingAmount = newUnits * netValue;
                         return (
                           <>
                             <div>同步减仓金额：¥{amount.toFixed(2)}</div>

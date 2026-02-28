@@ -210,9 +210,10 @@ function buildPositionRows(resultRows, fundMap) {
     const isActualValid = netValueDate === today || netValueDate === getYesterdayStr();
     const actualAmount = isActualValid ? (positionValue * dayGrowth) / 100 : 0;
     const actualPct = isActualValid ? dayGrowth : 0;
-    // 累计收益 = (昨日净值 - 持仓成本) × 持有份额 + 持仓收益
+    // 累计收益计算公式（根据 持仓成本 = 累计收益/持有份额 + 昨日净值 反推）
+    // 累计收益 = (持仓成本 - 昨日净值) × 持有份额 + 持仓收益
     // 注意：这里使用当前净值作为昨日净值计算，因为获取的是最新净值
-    const cumulative = netValueValid ? (netValue - costPerUnit) * holdingUnits + holdingProfit : holdingProfit;
+    const cumulative = netValueValid ? (costPerUnit - netValue) * holdingUnits + holdingProfit : holdingProfit;
 
     rows.push({
       code: String(code),

@@ -171,9 +171,20 @@ router.post('/api/fund/delete', loginRequired, (req, res) => {
     const codes = parseFundCodes(req.body.codes);
     if (!codes.length) return res.status(400).json({ success: false, message: '请提供基金代码' });
     const userId = getCurrentUserId(req);
+    // 从 user_funds 表中删除基金
     const stmt = db.prepare('DELETE FROM user_funds WHERE user_id = ? AND fund_code = ?');
     for (const code of codes) {
       stmt.run(userId, code);
+    }
+    // 从所有分组的 fund_codes 中移除被删除的基金
+    const groups = db.prepare('SELECT id, fund_codes FROM fund_groups WHERE user_id = ?').all(userId);
+    const updateStmt = db.prepare('UPDATE fund_groups SET fund_codes = ? WHERE id = ?');
+    for (const group of groups) {
+      const groupCodes = group.fund_codes ? JSON.parse(group.fund_codes) : [];
+      const newCodes = groupCodes.filter(c => !codes.includes(c));
+      if (newCodes.length !== groupCodes.length) {
+        updateStmt.run(JSON.stringify(newCodes), group.id);
+      }
     }
     res.json({ success: true, message: `已删除基金: ${codes.join(', ')}` });
   } catch (e) {
@@ -559,21 +570,37 @@ router.delete('/api/fund/groups/:id', loginRequired, (req, res) => {
 router.post('/api/fund/groups/:id/funds', loginRequired, async (req, res) => {
   try {
     const code = String((req.body.code || req.body.fund_code || '').trim());
+    const providedName = req.body.fund_name ? String(req.body.fund_name).trim() : '';
     if (!code) return res.status(400).json({ success: false, message: '请提供基金代码' });
     const userId = getCurrentUserId(req);
     getOrCreateDefaultGroup(userId);
     const existing = db.prepare('SELECT fund_code FROM user_funds WHERE user_id = ? AND fund_code = ?').get(userId, code);
     if (!existing) {
       let key = code;
-      let name = `基金${code}`;
-      const info = await fund123.searchFund(code);
-      if (info) {
-        if (info.fund_key != null && String(info.fund_key).trim() !== '') key = String(info.fund_key).trim();
-        if (info.fund_name != null && String(info.fund_name).trim() !== '') name = String(info.fund_name).trim();
+      // 优先使用前端提供的基金名称（来自联想搜索）
+      let name = providedName || `基金${code}`;
+      try {
+        console.log(`[添加基金] 正在获取基金 ${code} 信息...`);
+        const info = await fund123.searchFund(code);
+        if (info) {
+          console.log(`[添加基金] 基金 ${code} 搜索成功:`, info);
+          if (info.fund_key != null && String(info.fund_key).trim() !== '') key = String(info.fund_key).trim();
+          // 如果前端没有提供名称，才使用搜索结果的名称
+          if (!providedName && info.fund_name != null && String(info.fund_name).trim() !== '') {
+            name = String(info.fund_name).trim();
+          }
+        } else {
+          console.log(`[添加基金] 基金 ${code} 搜索返回 null，使用${providedName ? '前端提供的' : '默认'}名称`);
+        }
+      } catch (e) {
+        console.error(`[添加基金] 基金 ${code} 搜索异常:`, e.message);
       }
+      console.log(`[添加基金] 准备插入数据库: code=${code}, key=${key}, name=${name}`);
       db.prepare(
         `INSERT INTO user_funds (user_id, fund_code, fund_key, fund_name, is_hold, shares, sectors, holding_units, cost_per_unit) VALUES (?, ?, ?, ?, 0, 0, '[]', 0, 1)`
       ).run(userId, code, key, name);
+    } else {
+      console.log(`[添加基金] 基金 ${code} 已存在，跳过插入`);
     }
     const gid = req.params.id;
     const group = db.prepare('SELECT id, fund_codes, sort_order FROM fund_groups WHERE user_id = ? AND id = ?').get(userId, gid);
@@ -593,6 +620,7 @@ router.post('/api/fund/groups/:id/funds', loginRequired, async (req, res) => {
     }
     res.json({ success: true, message: '已添加' });
   } catch (e) {
+    console.error('[添加基金] 异常:', e);
     res.status(500).json({ success: false, message: e && e.message ? e.message : String(e) });
   }
 });
@@ -665,7 +693,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         holding_profit: holdingProfit || 0,
       };
     }
-    // 注意：累计收益计算已改为 (昨日净值-持仓成本)*持有份额+持仓收益，不再依赖减仓记录
+    // 注意：累计收益计算已改为 (持仓成本-昨日净值)*持有份额+持仓收益，不再依赖减仓记录
     // 保留此代码段用于向后兼容，但不再用于累计收益计算
     let realizedByCode = {};
     try {
@@ -688,13 +716,14 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       const list = [];
       for (const [code, r] of Object.entries(fundMapForHolding)) {
         const meta = fundRows.find(x => x.fund_code === code);
-        const holding = (r.holding_units || 0) * (r.cost_per_unit || 1);
-        // 累计收益使用持仓收益字段，不再依赖减仓记录
+        // 在没有净值数据时，持有金额无法计算，设为0
+        // 但仍然显示持有份额和成本单价
+        // 累计收益使用持仓收益字段
         const holdingProfit = r.holding_profit || 0;
         list.push({
           code: String(code),
           name: meta ? String(meta.fund_name) : `基金${code}`,
-          holding: Number(holding),
+          holding: 0, // 无净值时无法计算持有金额
           estAmount: 0,
           estPct: 0,
           actualAmount: 0,
@@ -756,7 +785,7 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
         return pctB - pctA;
       });
       rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
-      // 累计收益已在 buildPositionRows 中计算完成：=(昨日净值-持仓成本)*持有份额+持仓收益
+      // 累计收益已在 buildPositionRows 中计算完成：=(持仓成本-昨日净值)*持有份额+持仓收益
       // 不再额外添加减仓记录的已实现收益，因为持仓收益字段已包含历史收益
       if (rows.length === 0 && Object.keys(fundMapForHolding).length > 0) {
         rows = buildFallbackRows();

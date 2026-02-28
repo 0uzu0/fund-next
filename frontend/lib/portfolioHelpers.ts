@@ -68,10 +68,21 @@ export function shouldShowActualData(netValueDate: string | undefined): boolean 
 /** 从输入中解析基金代码（支持 "123456" 或 "123456 - 名称"） */
 export function parseCodeFromInput(val: string): string {
   const t = val.trim();
-  if (/^\d{6}$/.test(t)) return t;
-  const m = t.match(/^(\d{6})\s*[-–—]\s*/);
+  // 匹配5-6位数字的基金代码
+  if (/^\d{5,6}$/.test(t)) return t;
+  const m = t.match(/^(\d{5,6})\s*[-–—]\s*/);
   if (m) return m[1];
   return t;
+}
+
+/** 从输入中解析基金名称（支持 "123456" 或 "123456 - 名称"） */
+export function parseNameFromInput(val: string): string | null {
+  const t = val.trim();
+  // 匹配 "123456 - 名称" 或 "001001 - 华夏债券A/B" 格式
+  // 基金代码可能是5-6位数字
+  const m = t.match(/^\d{5,6}\s*[-–—]\s*(.+)$/);
+  if (m) return m[1].trim();
+  return null;
 }
 
 export const PENDING_ADD_KEY = 'lan_fund_pending_adds';
