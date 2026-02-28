@@ -28,12 +28,12 @@ router.get('/api/admin/api-keys', (req, res) => {
     
     res.json({
       success: true,
-      data: result.rows,
+      data: result.data || result.rows || [],
       pagination: {
-        total: result.total,
-        page: result.page,
-        pageSize: result.pageSize,
-        totalPages: Math.ceil(result.total / result.pageSize)
+        total: result.pagination?.total || result.total || 0,
+        page: result.pagination?.page || result.page || 1,
+        pageSize: result.pagination?.limit || result.pageSize || 20,
+        totalPages: result.pagination?.pages || Math.ceil((result.pagination?.total || result.total || 0) / (result.pagination?.limit || result.pageSize || 20))
       }
     });
   } catch (error) {

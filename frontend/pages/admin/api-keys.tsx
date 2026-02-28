@@ -34,37 +34,51 @@ export default function ApiKeysManagement() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newlyCreatedKey, setNewlyCreatedKey] = useState<string | null>(null);
+  // 获取当前登录用户ID（用于自动绑定）
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     permissions: 'read',
     rateLimit: 100,
-    expiresAt: '',
-    bindUserId: ''
+    expiresAt: ''
+    // bindUserId 不再从表单收集，而是自动使用当前登录用户
   });
 
   useEffect(() => {
     // 检查登录状态
-    apiGet<{ username?: string; is_admin?: boolean }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
+    apiGet<{ username?: string; is_admin?: boolean; user_id?: number }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
       .then((data) => {
+        console.log('Auth check success:', data);
         setAuth({ username: data.username ?? '', is_admin: data.is_admin });
+        // 保存当前用户ID用于自动绑定
+        if (data.user_id) {
+          setCurrentUserId(data.user_id);
+        }
         if (!data.is_admin) {
+          console.log('User is not admin, redirecting...');
           router.replace('/portfolio');
         } else {
           // 管理员认证通过后立即加载数据
+          console.log('Admin verified, loading data...');
           loadData();
         }
       })
-      .catch(() => router.replace('/login?redirect=/admin/api-keys'));
+      .catch((err) => {
+        console.error('Auth check failed:', err);
+        router.replace('/login?redirect=/admin/api-keys');
+      });
   }, [router]);
 
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('Loading API keys and users...');
       // 清除缓存确保获取最新数据
       clearCache('/api/admin/api-keys');
       clearCache('/api/admin/users');
-      
+
       const [keysRes, usersRes] = await Promise.all([
         apiGet<{ success?: boolean; data?: ApiKey[]; rows?: ApiKey[]; message?: string }>(
           getApiBase() + '/api/admin/api-keys',
@@ -75,19 +89,25 @@ export default function ApiKeysManagement() {
           { cache: { ttl: 0 } }
         )
       ]);
+
+      console.log('API Keys response:', keysRes);
+      console.log('Users response:', usersRes);
       
       // 处理 API Keys 响应 - 后端返回 { success: true, data: [...], pagination: {...} }
-      if (keysRes.success) {
-        setApiKeys(keysRes.data || keysRes.rows || []);
+      if (keysRes && (keysRes.success || Array.isArray(keysRes.data))) {
+        const keys = keysRes.data || keysRes.rows || [];
+        setApiKeys(Array.isArray(keys) ? keys : []);
       } else {
-        console.error('获取 API Keys 失败:', keysRes.message || '未知错误');
+        console.error('获取 API Keys 失败:', keysRes?.message || '未知错误', keysRes);
+        setApiKeys([]);
       }
-      
+
       // 处理 Users 响应 - 后端返回 { success: true, data: [...] }
-      if (usersRes.success && usersRes.data) {
-        setUsers(usersRes.data);
+      if (usersRes && (usersRes.success || Array.isArray(usersRes.data)) && usersRes.data) {
+        setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
       } else {
-        console.error('获取用户列表失败:', usersRes.message);
+        console.error('获取用户列表失败:', usersRes?.message, usersRes);
+        setUsers([]);
       }
     } catch (error: any) {
       console.error('加载数据失败:', error);
@@ -109,6 +129,9 @@ export default function ApiKeysManagement() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // 自动绑定当前登录用户
+      const bindUserId = currentUserId;
+
       const res = await apiPost<{
         success?: boolean;
         data?: { api_key?: string };
@@ -119,7 +142,7 @@ export default function ApiKeysManagement() {
         permissions: formData.permissions,
         rateLimit: parseInt(formData.rateLimit.toString()),
         expiresAt: formData.expiresAt || undefined,
-        bindUserId: formData.bindUserId ? parseInt(formData.bindUserId) : undefined
+        bindUserId: bindUserId // 自动绑定当前登录用户
       });
 
       if (res.success) {
@@ -132,8 +155,7 @@ export default function ApiKeysManagement() {
           description: '',
           permissions: 'read',
           rateLimit: 100,
-          expiresAt: '',
-          bindUserId: ''
+          expiresAt: ''
         });
         // 关闭创建弹窗
         setShowCreateModal(false);
@@ -187,11 +209,39 @@ export default function ApiKeysManagement() {
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast.success('已复制到剪贴板');
-    }).catch(() => {
+    // 检查 clipboard API 是否可用（需要 HTTPS 或 localhost）
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        toast.success('已复制到剪贴板');
+      }).catch(() => {
+        fallbackCopyToClipboard(text);
+      });
+    } else {
+      fallbackCopyToClipboard(text);
+    }
+  };
+
+  // 降级方案：使用传统的 execCommand 方法
+  const fallbackCopyToClipboard = (text: string) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      textArea.style.top = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) {
+        toast.success('已复制到剪贴板');
+      } else {
+        toast.error('复制失败，请手动复制');
+      }
+    } catch (err) {
       toast.error('复制失败，请手动复制');
-    });
+    }
   };
 
   const formatDate = (dateStr?: string) => {
@@ -199,7 +249,23 @@ export default function ApiKeysManagement() {
     return new Date(dateStr).toLocaleString('zh-CN');
   };
 
-  if (!auth?.is_admin) return null;
+  // 未登录或非管理员时显示加载中或空白
+  if (!auth) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div>加载中...</div>
+      </div>
+    );
+  }
+
+  if (!auth.is_admin) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+        <div>您没有权限访问此页面</div>
+        <Link href="/portfolio" style={{ color: 'var(--primary)' }}>返回首页</Link>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -428,38 +494,11 @@ export default function ApiKeysManagement() {
                     }}
                   />
                 </div>
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: 'block', marginBottom: 4 }}>
-                    绑定用户（可选）
-                    <span style={{ fontSize: 12, color: 'var(--text-dim)', marginLeft: 8 }}>
-                      (共 {users.length} 个用户)
-                    </span>
-                  </label>
-                  <select
-                    value={formData.bindUserId}
-                    onChange={(e) => setFormData({ ...formData, bindUserId: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: 8,
-                      borderRadius: 4,
-                      border: '1px solid var(--border-color)',
-                      background: 'var(--bg-secondary)',
-                      color: 'var(--text-primary)'
-                    }}
-                  >
-                    <option value="">不绑定</option>
-                    {users.length === 0 ? (
-                      <option value="" disabled>暂无用户数据</option>
-                    ) : (
-                      users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.username} {user.is_admin ? '(管理员)' : ''}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>
-                    绑定后，该 API Key 可访问对应用户的持仓数据
+                {/* 绑定用户已改为自动绑定当前登录用户 */}
+                <div style={{ marginBottom: 24, padding: 12, background: 'var(--bg-secondary)', borderRadius: 4 }}>
+                  <p style={{ fontSize: 13, color: 'var(--text-dim)', margin: 0 }}>
+                    此 API Key 将自动绑定到当前登录用户（{auth?.username || '未知'}），
+                    可用于访问该用户的持仓数据。
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>

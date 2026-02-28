@@ -66,16 +66,74 @@ app.use(
   })
 );
 
+// 请求日志中间件（调试用）
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    console.log(`[Request] ${req.method} ${req.path} from ${req.ip}`);
+  }
+  next();
+});
+
 // 健康检查端点（无需认证）
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API Key 诊断端点（无需认证，用于调试）
+app.get('/api/debug/api-key', (req, res) => {
+  const testKey = req.query.key;
+  if (!testKey) {
+    return res.status(400).json({ error: 'Missing key parameter' });
+  }
+
+  const db = require('./db');
+
+  // 查询所有 API Keys
+  const allKeys = db.prepare('SELECT id, key, name, active, expires_at FROM api_keys').all();
+
+  // 查询指定的 API Key
+  const row = db.prepare(
+    `SELECT k.*, u.username as bind_username
+     FROM api_keys k
+     LEFT JOIN users u ON k.bind_user_id = u.id
+     WHERE k.key = ?`
+  ).get(testKey);
+
+  res.json({
+    tested_key: testKey.substring(0, 30) + '...',
+    found: !!row,
+    key_details: row ? {
+      id: row.id,
+      name: row.name,
+      active: row.active,
+      expires_at: row.expires_at,
+      permissions: row.permissions,
+      is_expired: row.expires_at && new Date(row.expires_at) < new Date()
+    } : null,
+    total_keys_in_db: allKeys.length,
+    all_keys: allKeys.map(k => ({
+      id: k.id,
+      name: k.name,
+      key_prefix: k.key.substring(0, 20) + '...',
+      active: k.active
+    }))
+  });
+});
+
+// 加载 publicApi 路由并检查（放在其他路由之前）
+const publicApiRouter = require('./routes/publicApi');
+console.log('[Server] publicApi router loaded:', typeof publicApiRouter);
+app.use('/api/v1/public', publicApiRouter);
+
+// 测试端点：验证 /api/v1/public 路由是否工作
+app.get('/api/v1/public/test', (req, res) => {
+  res.json({ success: true, message: 'Public API route is working' });
 });
 
 app.use(authRoutes);
 app.use(aiRoutes);
 app.use(require('./routes/fundApi'));
 app.use(require('./routes/apiAdmin'));
-app.use(require('./routes/publicApi'));
 
 // 前端静态与 SPA 回退（由 Next 构建输出）
 // 支持开发环境（../frontend/out）和生产环境（./frontend/out）
@@ -92,6 +150,8 @@ app.use(express.static(frontendPublic));
 // 注意：登录页面和根路径不需要认证检查，避免重定向循环
 app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
+  // 防止重定向循环：如果已经在登录页面或正在前往登录页面，不再重定向
+  if (req.path === '/login' || req.query.redirect === '/login') return next();
   if (!req.session || !req.session.user_id) {
     const redirect = encodeURIComponent(req.path);
     return res.redirect('/login?redirect=' + redirect);
@@ -104,6 +164,15 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/_next')) return next();
   const hasExt = path.extname(req.path);
   if (hasExt) return next();
+
+  // 登录页面直接放行，避免重定向循环
+  if (req.path === '/login') {
+    const loginHtml = path.join(frontendBuild, 'login.html');
+    if (fs.existsSync(loginHtml)) return res.sendFile(loginHtml);
+    // 如果 login.html 不存在，返回 500 错误而不是陷入循环
+    return res.status(500).send('前端文件未构建，请先运行 npm run build');
+  }
+
   const base = req.path === '/' ? 'index' : req.path.slice(1).replace(/\//g, path.sep);
   const htmlPath = path.join(frontendBuild, base + '.html');
   if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath);
@@ -113,9 +182,13 @@ app.get('*', (req, res, next) => {
 });
 
 initDb().then(() => {
+  // 输出数据库路径信息（调试用）
+  const db = require('./db');
+  console.log(`[Server] Database initialized, path: ${process.env.DB_PATH || (process.env.NODE_ENV === 'production' ? '/app/data/fund_data.db' : './cache/fund_data.db')}`);
+
   cache.prune();
   setInterval(() => cache.prune(), 60 * 60 * 1000);
-  
+
   // 初始化数据源适配器（支持多数据源切换和故障转移）
   try {
     const { initDataSources } = require('./services/dataSourceAdapter');
@@ -123,9 +196,8 @@ initDb().then(() => {
   } catch (e) {
     console.warn('[数据源] 适配器初始化失败，使用默认数据源:', e.message);
   }
-  
+
   // 定期清理旧的图表数据（保留2天）
-  const db = require('./db');
   const cleanupOldChartData = () => {
     try {
       const twoDaysAgo = new Date();

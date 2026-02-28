@@ -4,12 +4,17 @@
  */
 const express = require('express');
 const router = express.Router();
-const { apiKeyAuth, requirePermission } = require('../apiAuth');
+const { apiKeyAuth } = require('../apiAuth');
 const fundQuotes = require('../services/fundQuotes');
-const sectorEastMoney = require('../services/sectorEastMoney');
-const marketIndices = require('../services/marketIndices');
 const preciousMetals = require('../services/preciousMetals');
-const tiantianFund = require('../services/tiantianFund');
+const fundHoldings = require('../services/fundHoldings');
+const { searchFundByKeyword } = require('../services/fundSearch');
+
+// 调试中间件：记录所有进入 publicApi 的请求
+router.use((req, res, next) => {
+  console.log(`[PublicApi] ${req.method} ${req.path}`);
+  next();
+});
 
 /**
  * @api {get} /api/v1/public/fund/search 搜索基金
@@ -17,19 +22,19 @@ const tiantianFund = require('../services/tiantianFund');
  * @apiParam {String} keyword 搜索关键词（基金代码或名称）
  * @apiParam {Number} [limit=10] 返回结果数量限制
  */
-router.get('/api/v1/public/fund/search', apiKeyAuth, async (req, res) => {
+router.get('/fund/search', apiKeyAuth, async (req, res) => {
   try {
     const { keyword, limit = 10 } = req.query;
-    
+
     if (!keyword || keyword.length < 2) {
       return res.status(400).json({
         error: 'bad_request',
         message: '搜索关键词至少需要2个字符'
       });
     }
-    
-    const results = await tiantianFund.searchFund(keyword, parseInt(limit));
-    
+
+    const results = await searchFundByKeyword(keyword, parseInt(limit));
+
     res.json({
       success: true,
       data: results.map(item => ({
@@ -49,168 +54,13 @@ router.get('/api/v1/public/fund/search', apiKeyAuth, async (req, res) => {
 });
 
 /**
- * @api {get} /api/v1/public/fund/quote 获取基金实时行情
- * @apiDescription 获取基金的最新净值、涨跌幅等实时数据
- * @apiParam {String} code 基金代码（多个用逗号分隔，最多10个）
- */
-router.get('/api/v1/public/fund/quote', apiKeyAuth, async (req, res) => {
-  try {
-    const { code } = req.query;
-    
-    if (!code) {
-      return res.status(400).json({
-        error: 'bad_request',
-        message: '请提供基金代码'
-      });
-    }
-    
-    const codes = code.split(',').map(c => c.trim()).slice(0, 10);
-    const quotes = [];
-    
-    for (const fundCode of codes) {
-      try {
-        const quote = await fundQuotes.getFundQuote(fundCode);
-        if (quote) {
-          quotes.push({
-            code: fundCode,
-            name: quote.name,
-            nav: quote.nav,
-            acc_nav: quote.accNav,
-            daily_return: quote.dailyReturn,
-            date: quote.date,
-            update_time: quote.updateTime
-          });
-        }
-      } catch (e) {
-        quotes.push({
-          code: fundCode,
-          error: '获取失败'
-        });
-      }
-    }
-    
-    res.json({
-      success: true,
-      data: quotes,
-      total: quotes.length
-    });
-  } catch (error) {
-    console.error('获取基金行情失败:', error);
-    res.status(500).json({
-      error: 'internal_error',
-      message: '行情服务暂时不可用'
-    });
-  }
-});
-
-/**
- * @api {get} /api/v1/public/fund/history 获取基金历史净值
- * @apiDescription 获取基金的历史净值数据
- * @apiParam {String} code 基金代码
- * @apiParam {Number} [days=30] 获取天数（最大365）
- */
-router.get('/api/v1/public/fund/history', apiKeyAuth, async (req, res) => {
-  try {
-    const { code, days = 30 } = req.query;
-    
-    if (!code) {
-      return res.status(400).json({
-        error: 'bad_request',
-        message: '请提供基金代码'
-      });
-    }
-    
-    const dayCount = Math.min(parseInt(days) || 30, 365);
-    const history = await fundQuotes.getFundHistory(code, dayCount);
-    
-    res.json({
-      success: true,
-      data: {
-        code: code,
-        records: history.map(item => ({
-          date: item.date,
-          nav: item.nav,
-          acc_nav: item.accNav,
-          daily_return: item.dailyReturn
-        }))
-      },
-      total: history.length
-    });
-  } catch (error) {
-    console.error('获取基金历史数据失败:', error);
-    res.status(500).json({
-      error: 'internal_error',
-      message: '历史数据服务暂时不可用'
-    });
-  }
-});
-
-/**
- * @api {get} /api/v1/public/market/sectors 获取行业板块数据
- * @apiDescription 获取各行业板块的涨跌幅情况
- */
-router.get('/api/v1/public/market/sectors', apiKeyAuth, async (req, res) => {
-  try {
-    const sectors = await sectorEastMoney.getSectorData();
-    
-    res.json({
-      success: true,
-      data: sectors.map(item => ({
-        name: item.name,
-        change_percent: item.changePercent,
-        leading_stock: item.leadingStock,
-        volume: item.volume
-      })),
-      total: sectors.length,
-      update_time: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('获取板块数据失败:', error);
-    res.status(500).json({
-      error: 'internal_error',
-      message: '板块数据服务暂时不可用'
-    });
-  }
-});
-
-/**
- * @api {get} /api/v1/public/market/indices 获取全球指数
- * @apiDescription 获取主要市场指数的实时行情
- */
-router.get('/api/v1/public/market/indices', apiKeyAuth, async (req, res) => {
-  try {
-    const indices = await marketIndices.getGlobalIndices();
-    
-    res.json({
-      success: true,
-      data: indices.map(item => ({
-        name: item.name,
-        symbol: item.symbol,
-        price: item.price,
-        change: item.change,
-        change_percent: item.changePercent,
-        market: item.market
-      })),
-      total: indices.length,
-      update_time: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('获取指数数据失败:', error);
-    res.status(500).json({
-      error: 'internal_error',
-      message: '指数数据服务暂时不可用'
-    });
-  }
-});
-
-/**
  * @api {get} /api/v1/public/market/precious-metals 获取贵金属价格
  * @apiDescription 获取黄金、白银等贵金属的实时价格
  */
-router.get('/api/v1/public/market/precious-metals', apiKeyAuth, async (req, res) => {
+router.get('/market/precious-metals', apiKeyAuth, async (req, res) => {
   try {
     const metals = await preciousMetals.getRealTimePrices();
-    
+
     res.json({
       success: true,
       data: metals.map(item => ({
@@ -234,55 +84,14 @@ router.get('/api/v1/public/market/precious-metals', apiKeyAuth, async (req, res)
 });
 
 /**
- * @api {get} /api/v1/public/time/beijing 获取北京时间
- * @apiDescription 获取当前北京时间（无需权限）
- */
-router.get('/api/v1/public/time/beijing', apiKeyAuth, (req, res) => {
-  const now = new Date();
-  const beijingTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-  
-  res.json({
-    success: true,
-    data: {
-      timestamp: beijingTime.getTime(),
-      iso: beijingTime.toISOString(),
-      formatted: beijingTime.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
-    }
-  });
-});
-
-/**
- * @api {get} /api/v1/public/quota 查询配额使用情况
- * @apiDescription 查询当前 API Key 的配额使用情况
- */
-router.get('/api/v1/public/quota', apiKeyAuth, (req, res) => {
-  // 从限流中间件获取的信息
-  const rateLimit = res.getHeader('X-RateLimit-Limit');
-  const remaining = res.getHeader('X-RateLimit-Remaining');
-  const reset = res.getHeader('X-RateLimit-Reset');
-  
-  res.json({
-    success: true,
-    data: {
-      client_name: req.apiKey.name,
-      permissions: req.apiKey.permissions,
-      bind_user: req.apiKey.bindUsername || null,
-      rate_limit: parseInt(rateLimit),
-      remaining: parseInt(remaining),
-      reset_at: new Date(parseInt(reset) * 1000).toISOString()
-    }
-  });
-});
-
-/**
  * @api {get} /api/v1/public/user/portfolio 获取用户持仓数据
  * @apiDescription 获取API Key绑定的用户的基金持仓数据（需要该Key绑定用户）
  * @apiPermission read
  */
-router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
+router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
-    
+
     // 检查API Key是否绑定了用户
     if (!req.apiKey.bindUserId) {
       return res.status(403).json({
@@ -290,12 +99,12 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
         message: '该API Key未绑定用户，无法访问持仓数据'
       });
     }
-    
+
     const userId = req.apiKey.bindUserId;
-    
+
     // 获取用户的持仓基金
     const holdings = db.prepare(`
-      SELECT 
+      SELECT
         uf.fund_code,
         uf.fund_name,
         uf.shares,
@@ -308,7 +117,7 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
       WHERE uf.user_id = ? AND uf.is_hold = 1
       ORDER BY uf.fund_code ASC
     `).all(userId);
-    
+
     if (holdings.length === 0) {
       return res.json({
         success: true,
@@ -326,7 +135,7 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
         }
       });
     }
-    
+
     // 获取实时行情
     const holdingsWithQuotes = await Promise.all(
       holdings.map(async (h) => {
@@ -336,7 +145,7 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
             const currentValue = (h.holding_units || 0) * (quote.nav || 0);
             const costValue = (h.holding_units || 0) * (h.cost_per_unit || 0);
             const profit = currentValue - costValue;
-            
+
             return {
               code: h.fund_code,
               name: h.fund_name,
@@ -364,8 +173,7 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
         } catch (e) {
           console.error(`获取基金 ${h.fund_code} 行情失败:`, e.message);
         }
-        
-        // 如果获取行情失败，返回基础信息
+
         return {
           code: h.fund_code,
           name: h.fund_name,
@@ -380,13 +188,13 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
         };
       })
     );
-    
+
     // 计算汇总数据
     const validHoldings = holdingsWithQuotes.filter(h => h.calculated !== null);
     const totalValue = validHoldings.reduce((sum, h) => sum + (h.calculated?.current_value || 0), 0);
     const totalCost = validHoldings.reduce((sum, h) => sum + (h.calculated?.cost_value || 0), 0);
     const totalProfit = totalValue - totalCost;
-    
+
     res.json({
       success: true,
       data: {
@@ -413,92 +221,112 @@ router.get('/api/v1/public/user/portfolio', apiKeyAuth, async (req, res) => {
 });
 
 /**
- * @api {get} /api/v1/public/user/position-records 获取用户交易记录
- * @apiDescription 获取API Key绑定的用户的基金交易记录（需要该Key绑定用户）
- * @apiPermission read
- * @apiParam {Number} [limit=50] 返回记录数量限制
- * @apiParam {Number} [offset=0] 分页偏移量
+ * @api {get} /api/v1/public/fund/detail 获取基金详细信息
+ * @apiDescription 获取基金的完整信息，包括名称、实时行情、历史净值、重仓股、各周期涨幅等
+ * @apiParam {String} code 基金代码（必填）
+ * @apiParam {Number} [history_days=365] 历史净值天数（最大365）
  */
-router.get('/api/v1/public/user/position-records', apiKeyAuth, async (req, res) => {
+router.get('/fund/detail', apiKeyAuth, async (req, res) => {
   try {
-    const db = require('../db');
-    
-    // 检查API Key是否绑定了用户
-    if (!req.apiKey.bindUserId) {
-      return res.status(403).json({
-        error: 'no_user_bound',
-        message: '该API Key未绑定用户，无法访问交易记录'
+    const code = String(req.query.code || '').trim();
+    const historyDays = Math.min(parseInt(req.query.history_days) || 365, 365);
+
+    if (!code) {
+      return res.status(400).json({
+        error: 'bad_request',
+        message: '请提供基金代码'
       });
     }
-    
-    const userId = req.apiKey.bindUserId;
-    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-    const offset = parseInt(req.query.offset) || 0;
-    
-    // 获取交易记录
-    const records = db.prepare(`
-      SELECT 
-        pr.id,
-        pr.fund_code,
-        pr.fund_name,
-        pr.op as operation,
-        pr.amount,
-        pr.units,
-        pr.trade_date,
-        pr.period,
-        pr.prev_holding_units,
-        pr.prev_cost_per_unit,
-        pr.new_holding_units,
-        pr.new_cost_per_unit,
-        pr.created_at
-      FROM position_records pr
-      WHERE pr.user_id = ?
-      ORDER BY pr.trade_date DESC, pr.created_at DESC
-      LIMIT ? OFFSET ?
-    `).all(userId, limit, offset);
-    
-    // 获取总数
-    const countResult = db.prepare(`
-      SELECT COUNT(*) as total FROM position_records WHERE user_id = ?
-    `).get(userId);
-    
+
+    // 并行获取所有数据
+    const [quote, history, holdings] = await Promise.all([
+      // 获取实时行情（包含名称）
+      fundQuotes.getFundQuote(code).catch(() => null),
+      // 获取历史净值
+      fundQuotes.getFundHistory(code, historyDays).catch(() => []),
+      // 获取重仓股
+      fundHoldings.getFundHoldings(code).catch(() => [])
+    ]);
+
+    if (!quote) {
+      return res.status(404).json({
+        error: 'not_found',
+        message: '未找到该基金的信息'
+      });
+    }
+
+    // 计算历史涨幅统计
+    const historyStats = history.length > 0 ? {
+      total_records: history.length,
+      first_date: history[0]?.date,
+      last_date: history[history.length - 1]?.date,
+      max_nav: Math.max(...history.map(h => h.nav || 0)),
+      min_nav: Math.min(...history.filter(h => h.nav > 0).map(h => h.nav || Infinity)),
+      avg_daily_return: history.reduce((sum, h) => sum + (h.dailyReturn || 0), 0) / history.length
+    } : null;
+
+    // 计算近期涨幅（最近1月、3月、6月、1年）
+    const calculatePeriodReturn = (days) => {
+      if (history.length < days) return null;
+      const recent = history.slice(-days);
+      const firstNav = recent[0]?.nav;
+      const lastNav = recent[recent.length - 1]?.nav;
+      if (!firstNav || !lastNav) return null;
+      return ((lastNav - firstNav) / firstNav * 100).toFixed(2);
+    };
+
     res.json({
       success: true,
       data: {
-        user_id: userId,
-        username: req.apiKey.bindUsername,
-        records: records.map(r => ({
-          id: r.id,
-          fund_code: r.fund_code,
-          fund_name: r.fund_name,
-          operation: r.operation,
-          amount: r.amount,
-          units: r.units,
-          trade_date: r.trade_date,
-          period: r.period,
-          holding_before: {
-            units: r.prev_holding_units,
-            cost_per_unit: r.prev_cost_per_unit
-          },
-          holding_after: {
-            units: r.new_holding_units,
-            cost_per_unit: r.new_cost_per_unit
-          },
-          created_at: r.created_at
+        // 基本信息
+        fund_code: code,
+        fund_name: quote.name,
+        fund_type: quote.type || '未知类型',
+
+        // 实时行情
+        current_quote: {
+          nav: quote.nav,
+          acc_nav: quote.accNav,
+          daily_return: quote.dailyReturn,
+          date: quote.date,
+          update_time: quote.updateTime
+        },
+
+        // 历史净值
+        history: {
+          records: history.map(item => ({
+            date: item.date,
+            nav: item.nav,
+            acc_nav: item.accNav,
+            daily_return: item.dailyReturn
+          })),
+          stats: historyStats,
+          period_returns: {
+            '1_week': calculatePeriodReturn(7),
+            '1_month': calculatePeriodReturn(30),
+            '3_months': calculatePeriodReturn(90),
+            '6_months': calculatePeriodReturn(180),
+            '1_year': calculatePeriodReturn(365)
+          }
+        },
+
+        // 重仓股
+        holdings: holdings.map(item => ({
+          stock_code: item.code,
+          stock_name: item.name,
+          weight: item.weight,
+          change_percent: item.change
         })),
-        pagination: {
-          total: countResult.total,
-          limit,
-          offset,
-          has_more: offset + records.length < countResult.total
-        }
+
+        // 更新时间
+        update_time: new Date().toISOString()
       }
     });
   } catch (error) {
-    console.error('获取交易记录失败:', error);
+    console.error('获取基金详细信息失败:', error);
     res.status(500).json({
       error: 'internal_error',
-      message: '获取交易记录失败'
+      message: '获取基金详细信息失败'
     });
   }
 });

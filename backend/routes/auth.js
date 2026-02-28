@@ -36,6 +36,7 @@ router.get('/api/auth/me', (req, res) => {
     return res.status(401).json({ error: 'unauthorized' });
   }
   res.json({
+    user_id: req.session.user_id,
     username: req.session.username || '',
     is_admin: !!req.session.is_admin,
   });
