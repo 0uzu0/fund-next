@@ -68,9 +68,8 @@ app.use(
 
 // 请求日志中间件（调试用）
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api')) {
-    console.log(`[Request] ${req.method} ${req.path} from ${req.ip}`);
-  }
+  // 记录所有请求，帮助调试
+  console.log(`[Request] ${req.method} ${req.url} from ${req.ip}`);
   next();
 });
 
@@ -143,6 +142,11 @@ const frontendBuild = fs.existsSync(path.join(__dirname, 'frontend/out'))
 const frontendPublic = fs.existsSync(path.join(__dirname, 'frontend/public'))
   ? path.join(__dirname, 'frontend/public')
   : path.join(__dirname, '../frontend/public');
+
+console.log(`[Server] Frontend build path: ${frontendBuild}`);
+console.log(`[Server] Frontend public path: ${frontendPublic}`);
+console.log(`[Server] Build exists: ${fs.existsSync(frontendBuild)}`);
+
 app.use(express.static(frontendBuild));
 app.use(express.static(frontendPublic));
 
@@ -161,13 +165,24 @@ app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/secto
 
 // Next 静态导出：优先返回对应 path 的 html 文件，否则 index.html
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/_next')) return next();
+  console.log(`[SPA] Handling ${req.path}`);
+
+  if (req.path.startsWith('/api') || req.path.startsWith('/_next')) {
+    console.log(`[SPA] Skipping API/static path`);
+    return next();
+  }
+
   const hasExt = path.extname(req.path);
-  if (hasExt) return next();
+  if (hasExt) {
+    console.log(`[SPA] Skipping file with extension`);
+    return next();
+  }
 
   // 登录页面直接放行，避免重定向循环
-  if (req.path === '/login') {
+  if (req.path === '/login' || req.path.startsWith('/login')) {
+    console.log(`[SPA] Serving login page`);
     const loginHtml = path.join(frontendBuild, 'login.html');
+    console.log(`[SPA] Looking for: ${loginHtml}, exists: ${fs.existsSync(loginHtml)}`);
     if (fs.existsSync(loginHtml)) return res.sendFile(loginHtml);
     // 如果 login.html 不存在，返回 500 错误而不是陷入循环
     return res.status(500).send('前端文件未构建，请先运行 npm run build');
@@ -175,9 +190,14 @@ app.get('*', (req, res, next) => {
 
   const base = req.path === '/' ? 'index' : req.path.slice(1).replace(/\//g, path.sep);
   const htmlPath = path.join(frontendBuild, base + '.html');
+  console.log(`[SPA] Looking for: ${htmlPath}, exists: ${fs.existsSync(htmlPath)}`);
   if (fs.existsSync(htmlPath)) return res.sendFile(htmlPath);
+
   const indexFile = path.join(frontendBuild, 'index.html');
+  console.log(`[SPA] Fallback to index: ${indexFile}, exists: ${fs.existsSync(indexFile)}`);
   if (fs.existsSync(indexFile)) return res.sendFile(indexFile);
+
+  console.log(`[SPA] No file found, passing to next handler`);
   next();
 });
 
