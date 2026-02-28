@@ -11,14 +11,8 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    apiGet<{ username?: string }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
-      .then(() => {
-        const redirect = typeof router.query.redirect === 'string' ? router.query.redirect : '/portfolio';
-        router.replace(redirect.startsWith('/') ? redirect : '/' + redirect);
-      })
-      .catch(() => {});
-  }, [router]);
+  // 自动重定向已禁用，避免循环问题
+  // 用户需要手动点击登录按钮
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
