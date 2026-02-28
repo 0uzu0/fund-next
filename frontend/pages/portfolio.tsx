@@ -739,7 +739,7 @@ export default function Portfolio() {
     // 持有份额 = 持有金额 / 昨日净值
     const units = netValue > 0 ? holdingAmount / netValue : 0;
     // 持仓成本 = 累计收益 / 持有份额 + 昨日净值
-    const costPerUnit = units > 0 ? cumulativeProfit / units + netValue : netValue;
+    const costPerUnit = units > 0 ? netValue - cumulativeProfit / units : netValue;
     return { units, costPerUnit };
   };
 
