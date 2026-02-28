@@ -167,7 +167,15 @@ const frontendPublic = fs.existsSync(path.join(__dirname, 'frontend/public'))
 console.log(`[Server] Frontend public path: ${frontendPublic}`);
 
 // 静态文件服务（CSS、JS、图片等）
-app.use('/_next', express.static(path.join(frontendBuild, '_next')));
+const nextStaticPath = path.join(frontendBuild, '_next');
+console.log(`[Server] _next static path: ${nextStaticPath}, exists: ${fs.existsSync(nextStaticPath)}`);
+
+// 先处理 _next 静态文件
+app.use('/_next', (req, res, next) => {
+  console.log(`[_next] Request: ${req.url}`);
+  next();
+}, express.static(nextStaticPath));
+
 app.use(express.static(frontendPublic));
 app.use(express.static(frontendBuild, { index: false }));
 
