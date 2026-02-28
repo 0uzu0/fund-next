@@ -151,7 +151,7 @@ app.use(express.static(frontendPublic));
 app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   // 防止重定向循环：如果已经在登录页面或正在前往登录页面，不再重定向
-  if (req.path === '/login' || req.query.redirect === '/login') return next();
+  if (req.path.startsWith('/login')) return next();
   if (!req.session || !req.session.user_id) {
     const redirect = encodeURIComponent(req.path);
     return res.redirect('/login?redirect=' + redirect);
