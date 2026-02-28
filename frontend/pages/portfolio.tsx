@@ -908,6 +908,9 @@ export default function Portfolio() {
     const sellDate = reducePositionTime.date;
     const isAfter15 = reducePositionTime.period === 'after15';
     
+    // 计算赎回费率（预设或自定义）
+    const reduceFeeRate = getReducePositionFeeRate();
+    
     // 根据交易规则获取净值（历史净值不变，可缓存）
     let netValue = parseNetValue(reducePositionRow.netValue) || 1;
     try {
