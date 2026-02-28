@@ -154,30 +154,25 @@ app.get('/api/v1/public/test', (req, res) => {
   res.json({ success: true, message: 'Public API route is working' });
 });
 
-app.use(authRoutes);
-app.use(aiRoutes);
-app.use(require('./routes/fundApi'));
-app.use(require('./routes/apiAdmin'));
-
-// 前端静态资源服务
+// 静态文件服务（CSS、JS、图片等）- 必须在认证路由之前
 const frontendPublic = fs.existsSync(path.join(__dirname, 'frontend/public'))
   ? path.join(__dirname, 'frontend/public')
   : path.join(__dirname, '../frontend/public');
 
-console.log(`[Server] Frontend public path: ${frontendPublic}`);
-
-// 静态文件服务（CSS、JS、图片等）
 const nextStaticPath = path.join(frontendBuild, '_next');
+console.log(`[Server] Frontend public path: ${frontendPublic}`);
 console.log(`[Server] _next static path: ${nextStaticPath}, exists: ${fs.existsSync(nextStaticPath)}`);
 
-// 先处理 _next 静态文件
-app.use('/_next', (req, res, next) => {
-  console.log(`[_next] Request: ${req.url}`);
-  next();
-}, express.static(nextStaticPath));
-
+// 先处理 _next 静态文件（必须在认证路由之前）
+app.use('/_next', express.static(nextStaticPath));
 app.use(express.static(frontendPublic));
 app.use(express.static(frontendBuild, { index: false }));
+
+// 认证路由
+app.use(authRoutes);
+app.use(aiRoutes);
+app.use(require('./routes/fundApi'));
+app.use(require('./routes/apiAdmin'));
 
 // 3. 认证保护的路由
 app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {

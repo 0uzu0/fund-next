@@ -4,13 +4,10 @@
  */
 
 /** 后端 API 根地址，供页面与 hooks 复用 */
-// 生产环境强制使用相对路径，避免硬编码 localhost 导致跨域问题
-export const API_BASE = process.env.NODE_ENV === 'production' ? '' : (process.env.NEXT_PUBLIC_API_URL || '');
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 /** 获取请求用的 API 根地址（无配置时用当前页 origin） */
 export function getApiBase(): string {
-  // 生产环境始终使用相对路径，确保请求发送到同一域名
-  if (process.env.NODE_ENV === 'production') return '';
   if (API_BASE) return API_BASE;
   if (typeof window !== 'undefined') return window.location.origin;
   return '';
