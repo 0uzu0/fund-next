@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'export',
-  assetPrefix: '',
-  reactStrictMode: true,
+  distDir: 'out',
+  assetPrefix: undefined, // 使用相对路径
+  reactStrictMode: false, // 禁用严格模式避免双重渲染
   
   // 性能优化配置
   compress: true,
@@ -13,20 +14,14 @@ const nextConfig = {
     unoptimized: true, // 静态导出需要禁用图片优化
   },
   
-  // 实验性功能：优化编译
-  // 注意：optimizeCss 需要安装 critters 包，且与静态导出不兼容，已禁用
-  // experimental: {
-  //   optimizeCss: true, // 优化 CSS
-  // },
-  
   // 生产环境优化
   swcMinify: true, // 使用 SWC 压缩（更快）
   
-  // 开发时把 /api 代理到 Express 后端，避免 404（生产由 Express 同源托管则无需代理）
+  // 开发时把 /api 代理到 Express 后端（仅在开发环境有效）
   async rewrites() {
-    return [
+    return process.env.NODE_ENV === 'development' ? [
       { source: '/api/:path*', destination: 'http://localhost:8311/api/:path*' },
-    ];
+    ] : [];
   },
   
   webpack: (config, { isServer, dev }) => {
