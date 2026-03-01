@@ -20,13 +20,23 @@ type SectorRow = {
 type SectorFund = {
   code: string;
   name: string;
+  type: string;
+  date: string;
   net_value: string;
   day_growth: string;
-  estimated_growth?: string;
+  week1: string;
+  month1: string;
+  month3: string;
+  month6: string;
+  year_this: string;
+  year1: string;
+  year2: string;
+  year3: string;
+  total: string;
 };
 
 const SECTOR_CATEGORIES: Record<string, string[]> = {
-  '科技': ['人工智能', '半导体', '云计算', '5G', '光模块', 'CPO', '通信设备', 'PCB', '消费电子', '计算机', '软件开发', '信创', '网络安全', 'IT服务', '国产软件', '计算机设备', '光通信', '算力', '通信', '电子', '光学光电子', '元件', '存储芯片', '第三代半导体', '光刻胶', '电子化学品', 'LED', '毫米波', '智能穿戴', '东数西算', '数据要素', '国资云', 'Web3.0', 'AIGC', 'AI应用', 'AI手机', 'AI眼镜', 'DeepSeek', 'TMT', '科技'],
+  '科技': ['人工智能', '半导体', '云计算', '5G', '光模块', 'CPO', 'F5G', '通信设备', 'PCB', '消费电子', '计算机', '软件开发', '信创', '网络安全', 'IT服务', '国产软件', '计算机设备', '光通信', '算力', '脑机接口', '通信', '电子', '光学光电子', '元件', '存储芯片', '第三代半导体', '光刻胶', '电子化学品', 'LED', '毫米波', '智能穿戴', '东数西算', '数据要素', '国资云', 'Web3.0', 'AIGC', 'AI应用', 'AI手机', 'AI眼镜', 'DeepSeek', 'TMT', '科技'],
   '医药健康': ['医药生物', '医疗器械', '生物疫苗', 'CRO', '创新药', '精准医疗', '医疗服务', '中药', '化学制药', '生物制品', '基因测序', '超级真菌'],
   '消费': ['食品饮料', '白酒', '家用电器', '纺织服饰', '商贸零售', '新零售', '家居用品', '文娱用品', '婴童', '养老产业', '体育', '教育', '在线教育', '社会服务', '轻工制造', '新消费', '可选消费', '消费', '家电零部件', '智能家居'],
   '金融': ['银行', '证券', '保险', '非银金融', '国有大型银行', '股份制银行', '城商行', '金融'],
@@ -437,7 +447,7 @@ function Sectors() {
                   <div
                     className="sector-modal-content"
                     style={{
-                      maxWidth: 720,
+                      maxWidth: 1100,
                       width: '95%',
                       maxHeight: '85vh',
                       overflow: 'hidden',
@@ -467,7 +477,7 @@ function Sectors() {
                         <p style={{ padding: 24, color: 'var(--text-dim)' }}>该板块暂无基金数据</p>
                       ) : (
                         <div className="table-container">
-                          <table className="style-table">
+                          <table className="style-table" style={{ fontSize: 'var(--font-size-sm)' }}>
                             <thead>
                               <tr>
                                 <th>基金代码</th>
@@ -481,25 +491,32 @@ function Sectors() {
                                 >
                                   日增长率
                                 </th>
+                                <th>近1月</th>
+                                <th>近6月</th>
+                                <th>近1年</th>
                                 <th>操作</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {sortedSectorFunds.slice(0, 100).map((row, i) => {
+                              {sortedSectorFunds.slice(0, 200).map((row, i) => {
                                 const isInGroup = fundCodesInGroups.has(row.code);
+                                const colorIfNeg = (val: string) => String(val).startsWith('-') ? 'negative' : 'positive';
                                 return (
                                   <tr key={i}>
                                     <td style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{row.code}</td>
-                                    <td>{row.name}</td>
+                                    <td style={{ maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.name}>{row.name}</td>
                                     <td style={{ fontFamily: 'var(--font-mono)' }}>{row.net_value}</td>
-                                    <td className={String(row.day_growth).startsWith('-') ? 'negative' : 'positive'} style={{ fontFamily: 'var(--font-mono)' }}>{row.day_growth}</td>
+                                    <td className={colorIfNeg(row.day_growth)} style={{ fontFamily: 'var(--font-mono)' }}>{row.day_growth}</td>
+                                    <td className={colorIfNeg(row.month1)} style={{ fontFamily: 'var(--font-mono)' }}>{row.month1}</td>
+                                    <td className={colorIfNeg(row.month6)} style={{ fontFamily: 'var(--font-mono)' }}>{row.month6}</td>
+                                    <td className={colorIfNeg(row.year1)} style={{ fontFamily: 'var(--font-mono)' }}>{row.year1}</td>
                                     <td>
                                       <button
                                         type="button"
                                         className="btn btn-info"
                                         style={{
-                                          padding: '6px 12px',
-                                          fontSize: 'var(--font-size-sm)',
+                                          padding: '4px 8px',
+                                          fontSize: 'var(--font-size-xs)',
                                           opacity: isInGroup ? 0.6 : 1,
                                           cursor: isInGroup ? 'not-allowed' : 'pointer',
                                         }}

@@ -450,6 +450,8 @@ export default function Portfolio() {
           if (chartFund && deleteSelectedCodes.includes(chartFund.code)) {
             setChartFund(null);
           }
+          // 立即从 fundList 中移除被删除的基金（即时更新图表下拉框）
+          setFundList((prev) => prev.filter((f) => !deleteSelectedCodes.includes(f.code)));
           // 刷新持有基金数据
           fetchData();
           // 强制刷新自选基金数据（跳过缓存）

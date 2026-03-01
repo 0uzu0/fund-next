@@ -52,8 +52,8 @@ export default function Login() {
           <div className="logo-wrapper">
             <img src="/1.ico" alt="Logo" className="logo" />
           </div>
-          <h1>LanFund</h1>
-          <p>智能基金管理助手</p>
+          <h1>MoreFund</h1>
+          <p>魔方基金管理助手</p>
         </div>
 
         {error && <div className="error-message">{error}</div>}
