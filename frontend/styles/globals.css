@@ -643,7 +643,7 @@ h3 {
 /* 仅做网格容器，不设背景和边框，避免与 .portfolio-block 形成双层框 */
 .summary-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   padding: 0;
 }

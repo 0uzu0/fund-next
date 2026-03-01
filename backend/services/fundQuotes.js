@@ -153,7 +153,7 @@ async function searchCode(fundMap) {
 }
 
 /**
- * 将 searchCode 结果与用户持仓合并，得到带持仓金额、预估收益、累计收益的行（与 Python calculate_position_summary 一致）
+ * 将 searchCode 结果与用户持仓合并，得到带持仓金额、预估收益、持仓收益的行
  * @param {Array<[string, string, string, string, string, string, string, string, string?]>} resultRows - searchCode 返回，第9项为估值日期 YYYY-MM-DD
  * @param {Record<string, { shares?: number, holding_units?: number, cost_per_unit?: number, holding_profit?: number }>} fundMap - 用户基金与份额
  * @returns {Array<{ code: string, name: string, holding: number, estAmount: number, estPct: number, actualAmount: number, actualPct: number, cumulative: number }>}
@@ -210,8 +210,7 @@ function buildPositionRows(resultRows, fundMap) {
     const isActualValid = netValueDate === today || netValueDate === getYesterdayStr();
     const actualAmount = isActualValid ? (positionValue * dayGrowth) / 100 : 0;
     const actualPct = isActualValid ? dayGrowth : 0;
-    // 累计收益 = (昨日净值 - 持仓成本) × 持有份额
-    // 当持有份额为0时，累计收益为0（已清仓）
+    // 持仓收益 = holding_profit（手动填写或减仓时累计的真实收益）
     // 当净值有效时，动态计算；净值无效时使用 holding_profit 作为备用
     const cumulative = holdingUnits <= 0 ? 0 : (netValueValid ? (netValue - costPerUnit) * holdingUnits : holdingProfit);
 

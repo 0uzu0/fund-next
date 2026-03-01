@@ -49,6 +49,7 @@ export default function Portfolio() {
     todayActual: 0,
     cumulative: 0,
   });
+  const [clearedProfit, setClearedProfit] = useState(0); // 清仓基金历史收益
   const [fundList, setFundList] = useState<{ code: string; name: string }[]>([]);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartSvgContainerRef = useRef<HTMLDivElement>(null);
@@ -128,9 +129,6 @@ export default function Portfolio() {
   const [reducePositionTime, setReducePositionTime] = useState<{ date: string; period: 'before15' | 'after15' } | null>(null);
   const [reducePositionLoading, setReducePositionLoading] = useState(false);
   const [reducePositionTimePickerOpen, setReducePositionTimePickerOpen] = useState(false);
-  const [cumulativeCorrection, setCumulativeCorrection] = useState(0);
-  const [showCumulativeCorrectionModal, setShowCumulativeCorrectionModal] = useState(false);
-  const [cumulativeCorrectionInput, setCumulativeCorrectionInput] = useState('');
   // 行业板块标注/删除
   const [sectorOp, setSectorOp] = useState<'mark' | 'remove' | null>(null);
   const [showSectorFundModal, setShowSectorFundModal] = useState(false);
@@ -146,7 +144,7 @@ export default function Portfolio() {
   const [deleteFundList, setDeleteFundList] = useState<{ code: string; name: string }[]>([]);
   const [deleteSelectedCodes, setDeleteSelectedCodes] = useState<string[]>([]);
   const [deleteSubmitLoading, setDeleteSubmitLoading] = useState(false);
-  // 持有基金表排序：列索引 2~7（持仓金额到累计收益）
+  // 持有基金表排序：列索引 2~7（持仓金额到持仓收益）
   const { sort: holdingSort, handleSort: onHoldingSortClick } = useTableSort();
   const { sort: watchlistSort, handleSort: onWatchlistSortClick } = useTableSort();
   // 持有基金分页：每页条数、当前页
@@ -164,12 +162,6 @@ export default function Portfolio() {
     if (typeof window === 'undefined') return;
     const s = localStorage.getItem('portfolio_data_source');
     if (s === 'tiantian' || s === 'fund123') setDataSource(s);
-  }, []);
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const v = localStorage.getItem('lan_fund_cumulative_correction');
-    const n = v !== null && v !== '' ? parseFloat(v) : 0;
-    setCumulativeCorrection(Number.isFinite(n) ? n : 0);
   }, []);
 
   const fetchAuth = useCallback(() => {
@@ -210,6 +202,9 @@ export default function Portfolio() {
           todayActual += toNum(r.actualAmount);
           cum += toNum(r.cumulative);
         });
+        // 获取清仓基金历史收益
+        const clearedProfitValue = toNum((tableRes as any).clearedProfit) || 0;
+        setClearedProfit(clearedProfitValue);
         const actualPct = total ? (todayActual / total) * 100 : 0;
         const todayActualText = todayActual !== 0 ? `${formatMoney(todayActual)} (${formatPct(actualPct)})` : '净值未更新';
         setSummary({
@@ -223,6 +218,7 @@ export default function Portfolio() {
       } else if (tableRes.success) {
         // 即使没有数据也要清空 fundRows
         setFundRows([]);
+        setClearedProfit(0);
       }
       if (listRes.success && listRes.funds) {
         setFundList(listRes.funds);
@@ -739,14 +735,14 @@ export default function Portfolio() {
   const calculateHoldingData = (holdingAmount: number, cumulativeProfit: number, netValue: number) => {
     // 持有份额 = 持有金额 / 昨日净值
     const units = netValue > 0 ? holdingAmount / netValue : 0;
-    // 持仓成本 = 累计收益 / 持有份额 + 昨日净值
+    // 持仓成本 = 持仓收益 / 持有份额 + 昨日净值
     const costPerUnit = units > 0 ? netValue - cumulativeProfit / units : netValue;
     return { units, costPerUnit };
   };
 
   const openEditHolding = (r: FundRow) => {
     setEditHoldingRow(r);
-    // 初始化持仓金额和累计收益
+    // 初始化持仓金额和持仓收益
     const currentHolding = (r.holding_units ?? 0) * (r.cost_per_unit ?? 1);
     const currentCumulative = (r as any).holding_profit ?? 0;
     setEditHoldingAmount(currentHolding.toFixed(2));
@@ -759,7 +755,7 @@ export default function Portfolio() {
     const holdingAmount = parseFloat(editHoldingAmount);
     const cumulativeProfit = parseFloat(editCumulativeProfit);
     if (isNaN(holdingAmount) || holdingAmount < 0 || isNaN(cumulativeProfit)) {
-      setEditHoldingError('请输入有效的持仓金额和累计收益');
+      setEditHoldingError('请输入有效的持仓金额和持仓收益');
       return;
     }
 
@@ -881,7 +877,7 @@ export default function Portfolio() {
 
     // 加仓时计算新的加权平均成本
     // 新成本 = (原份额×原成本 + 新份额×买入净值) / 新总份额
-    // 这样累计收益 = (昨日净值 - 新成本) × 新份额 会自动正确
+    // 这样持仓收益 = (昨日净值 - 新成本) × 新份额 会自动正确
     let newCost = oldCost;
     if (oldUnits > 0 && newUnits > 0) {
       const oldTotalCost = oldUnits * oldCost;
@@ -893,11 +889,11 @@ export default function Portfolio() {
       newCost = Math.round(netValue * 10000) / 10000;
     }
 
-    // 累计收益不再单独存储，而是通过 (净值 - 成本) × 份额 动态计算
-    // holding_profit 仅在净值无效时作为备用
+    // 加仓时按比例调整持仓收益
     const oldCumulativeProfit = toNum((addPositionRow as any).holding_profit);
-    // 按比例调整 holding_profit（仅作为备用值）
-    const newCumulativeProfit = oldUnits > 0 ? oldCumulativeProfit * (newUnits / oldUnits) : 0;
+    const newCumulativeProfit = oldUnits > 0 && newUnits > 0 
+      ? oldCumulativeProfit * (newUnits / oldUnits) 
+      : 0;
 
     setAddPositionLoading(true);
     try {
@@ -987,8 +983,7 @@ export default function Portfolio() {
     // 减仓时成本单价不变
     const newCost = oldCost;
 
-    // 累计收益通过公式动态计算：(净值 - 成本) × 份额
-    // holding_profit 仅作为净值无效时的备用值，按比例调整
+    // 减仓时按比例调整持仓收益
     const newCumulativeProfit = oldUnits > 0 && newUnits > 0 
       ? oldCumulativeProfit * (newUnits / oldUnits) 
       : 0;
@@ -1144,7 +1139,7 @@ export default function Portfolio() {
 
   const displayTotalHolding = useMemo(() => displayFundRows.reduce((s, r) => s + r.displayHolding, 0), [displayFundRows]);
   const displayTodayEstPct = displayTotalHolding > 0 ? (summary.todayEstChange / displayTotalHolding) * 100 : summary.todayEstPct;
-  const displayCumulative = summary.cumulative - cumulativeCorrection;
+  const displayCumulative = summary.cumulative;
   const isSummaryEstimateStale = useMemo(() => {
     const first = fundRows.find((r) => toNum(r.holding) > 0) || fundRows[0];
     return first ? isEstimateStale(first.estimateDate) : false;
@@ -1152,7 +1147,7 @@ export default function Portfolio() {
 
   const aiContext = useMemo(() => {
     const parts: string[] = [];
-    parts.push(`总持仓约 ${formatMoney(summary.totalHolding)}，今日预估涨跌 ${formatMoney(summary.todayEstChange)}（${formatPct(summary.todayEstPct)}），累计收益 ${formatMoney(displayCumulative)}。`);
+    parts.push(`总持仓约 ${formatMoney(summary.totalHolding)}，今日预估涨跌 ${formatMoney(summary.todayEstChange)}（${formatPct(summary.todayEstPct)}），持仓收益 ${formatMoney(displayCumulative)}。`);
     if (fundRows.length > 0) {
       parts.push('持仓基金：');
       fundRows.forEach((r) => {
@@ -1163,24 +1158,6 @@ export default function Portfolio() {
     }
     return parts.join('\n');
   }, [summary.totalHolding, summary.todayEstChange, summary.todayEstPct, displayCumulative, fundRows]);
-
-  const openCumulativeCorrectionModal = () => {
-    setCumulativeCorrectionInput(cumulativeCorrection === 0 ? '' : String(cumulativeCorrection));
-    setShowCumulativeCorrectionModal(true);
-  };
-  const applyCumulativeCorrection = () => {
-    const raw = cumulativeCorrectionInput.trim();
-    const val = raw === '' ? 0 : parseFloat(raw);
-    if (!Number.isFinite(val)) {
-      toast.error('请输入有效的数字');
-      return;
-    }
-    setCumulativeCorrection(val);
-    try {
-      localStorage.setItem('lan_fund_cumulative_correction', String(val));
-    } catch (_) {}
-    setShowCumulativeCorrectionModal(false);
-  };
 
   if (!auth) {
     return (
@@ -1825,6 +1802,7 @@ export default function Portfolio() {
               displayTotalHolding={displayTotalHolding}
               displayTodayEstPct={displayTodayEstPct}
               displayCumulative={displayCumulative}
+              clearedProfit={clearedProfit}
               isSummaryEstimateStale={isSummaryEstimateStale}
               onShowShowoff={() => setShowShowoffModal(true)}
               onToggleSensitive={() => {
@@ -1832,7 +1810,6 @@ export default function Portfolio() {
                 if (typeof window !== 'undefined') localStorage.setItem('hideSensitiveValues', String(next));
                 setHideSensitiveValues(next);
               }}
-              onCumulativeCorrection={openCumulativeCorrectionModal}
             />
           </section>
 
@@ -2343,32 +2320,6 @@ export default function Portfolio() {
                   <button type="button" className="btn btn-secondary" onClick={() => setShowDeleteGroupModal(false)} disabled={deletingGroupId !== null}>
                     关闭
                   </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* 累计收益修正弹窗（与原项目一致：显示累计收益 = 现有累计收益 − 修正金额） */}
-          {showCumulativeCorrectionModal && (
-            <div className="sector-modal active" style={{ display: 'flex' }} onClick={() => setShowCumulativeCorrectionModal(false)}>
-              <div className="sector-modal-content" style={{ maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
-                <div className="sector-modal-header">修正累计收益</div>
-                <p style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)', margin: '0 0 12px 0' }}>显示累计收益 = 现有累计收益 − 修正金额</p>
-                <div style={{ padding: '16px 0' }}>
-                  <label style={{ display: 'block', marginBottom: 6, fontSize: 'var(--font-size-xs)', color: 'var(--text-dim)' }}>修正金额（元）</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0"
-                    value={cumulativeCorrectionInput}
-                    onChange={(e) => setCumulativeCorrectionInput(e.target.value)}
-                    className="sector-modal-search"
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div className="sector-modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowCumulativeCorrectionModal(false)}>取消</button>
-                  <button type="button" className="btn btn-primary" onClick={applyCumulativeCorrection}>确定</button>
                 </div>
               </div>
             </div>

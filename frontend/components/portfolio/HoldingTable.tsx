@@ -27,7 +27,7 @@ const COLS = [
   { key: 4, label: '预估涨跌' },
   { key: 5, label: '实际收益' },
   { key: 6, label: '实际涨跌' },
-  { key: 7, label: '累计收益' },
+  { key: 7, label: '持仓收益' },
 ] as const;
 
 export default function HoldingTable({

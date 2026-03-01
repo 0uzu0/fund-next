@@ -199,12 +199,25 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
     );
 
     // 计算汇总数据
-    // 总累计收益 = 所有持有基金的累计收益之和
+    // 持仓收益 = 所有持有基金的 profit 之和
+    // 累计收益 = 持仓收益 + 清仓基金历史收益
     const validHoldings = holdingsWithQuotes.filter(h => h.calculated !== null);
     const totalValue = validHoldings.reduce((sum, h) => sum + (h.calculated?.current_value || 0), 0);
     const totalCost = validHoldings.reduce((sum, h) => sum + (h.calculated?.cost_value || 0), 0);
     const totalProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.profit || 0), 0);
     const totalTodayProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.today_profit || 0), 0);
+    
+    // 计算清仓基金的历史收益
+    let clearedProfit = 0;
+    try {
+      const clearedRows = db.prepare('SELECT holding_profit FROM user_funds WHERE user_id = ? AND (holding_units IS NULL OR holding_units = 0) AND holding_profit IS NOT NULL AND holding_profit != 0').all(userId);
+      for (const r of clearedRows) {
+        clearedProfit += Number(r.holding_profit) || 0;
+      }
+    } catch (e) {}
+    
+    // 累计收益 = 持仓收益 + 清仓基金历史收益
+    const totalCumulative = totalProfit + clearedProfit;
 
     res.json({
       success: true,
@@ -217,7 +230,8 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
           valid_quotes: validHoldings.length,
           total_value: Math.round(totalValue * 100) / 100,
           total_cost: Math.round(totalCost * 100) / 100,
-          total_profit: Math.round(totalProfit * 100) / 100,
+          holding_profit: Math.round(totalProfit * 100) / 100,
+          cumulative_profit: Math.round(totalCumulative * 100) / 100,
           today_profit: Math.round(totalTodayProfit * 100) / 100,
           profit_rate: totalCost > 0 ? Math.round((totalProfit / totalCost) * 10000) / 100 : 0
         }

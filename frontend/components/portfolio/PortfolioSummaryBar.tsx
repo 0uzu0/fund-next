@@ -7,11 +7,12 @@ type PortfolioSummaryBarProps = {
   displayTotalHolding: number;
   displayTodayEstPct: number;
   displayCumulative: number;
+  /** 清仓基金历史收益 */
+  clearedProfit?: number;
   /** 次日9:30之后估值未更新时为 true，今日预估涨跌显示 — */
   isSummaryEstimateStale?: boolean;
   onShowShowoff: () => void;
   onToggleSensitive: () => void;
-  onCumulativeCorrection: () => void;
 };
 
 export default function PortfolioSummaryBar({
@@ -20,11 +21,14 @@ export default function PortfolioSummaryBar({
   displayTotalHolding,
   displayTodayEstPct,
   displayCumulative,
+  clearedProfit = 0,
   isSummaryEstimateStale = false,
   onShowShowoff,
   onToggleSensitive,
-  onCumulativeCorrection,
 }: PortfolioSummaryBarProps) {
+  // 累计收益 = 持仓收益 + 清仓基金历史收益
+  const totalCumulative = displayCumulative + clearedProfit;
+  
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -75,19 +79,15 @@ export default function PortfolioSummaryBar({
           </div>
         </div>
         <div className="summary-card">
+          <div className="summary-label">持仓收益</div>
+          <div className={`summary-value ${displayCumulative >= 0 ? 'positive' : 'negative'}`}>
+            {hideSensitiveValues ? '****' : formatMoney(displayCumulative)}
+          </div>
+        </div>
+        <div className="summary-card">
           <div className="summary-label">累计收益</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span className={`summary-value ${displayCumulative >= 0 ? 'positive' : 'negative'}`}>
-              {hideSensitiveValues ? '****' : formatMoney(displayCumulative)}
-            </span>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ padding: '6px 12px', fontSize: 'var(--font-size-xs)' }}
-              onClick={onCumulativeCorrection}
-            >
-              修正
-            </button>
+          <div className={`summary-value ${totalCumulative >= 0 ? 'positive' : 'negative'}`}>
+            {hideSensitiveValues ? '****' : formatMoney(totalCumulative)}
           </div>
         </div>
       </div>

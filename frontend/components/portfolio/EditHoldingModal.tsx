@@ -74,15 +74,15 @@ export default function EditHoldingModal({
             </div>
           </div>
           
-          {/* 累计收益输入框 */}
+          {/* 持仓收益输入框 */}
           <div style={{ marginTop: 20 }}>
-            <div style={{ color: 'var(--text-main)', marginBottom: 8, fontWeight: 500 }}>累计收益（元）</div>
+            <div style={{ color: 'var(--text-main)', marginBottom: 8, fontWeight: 500 }}>持仓收益（元）</div>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <span style={{ position: 'absolute', left: 12, color: 'var(--text-dim)', zIndex: 1 }}>¥</span>
               <input
                 type="number"
                 step="0.01"
-                placeholder="填写累计收益，用于计算成本单价"
+                placeholder="填写持仓收益，用于计算成本单价"
                 value={cumulativeProfit}
                 onChange={(e) => onCumulativeProfitChange(e.target.value)}
                 style={{ 
