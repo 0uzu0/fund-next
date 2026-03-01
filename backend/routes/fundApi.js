@@ -799,7 +799,15 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       }
     }
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.json({ success: true, rows, total: rows.length });
+    // 计算清仓基金的历史累计收益总和
+    let clearedProfit = 0;
+    try {
+      const clearedRows = db.prepare('SELECT holding_profit FROM user_funds WHERE user_id = ? AND (holding_units IS NULL OR holding_units = 0) AND holding_profit IS NOT NULL AND holding_profit != 0').all(userId);
+      for (const r of clearedRows) {
+        clearedProfit += Number(r.holding_profit) || 0;
+      }
+    } catch (e) {}
+    res.json({ success: true, rows, total: rows.length, clearedProfit });
   } catch (e) {
     res.status(500).json({ success: false, message: String(e) });
   }

@@ -994,10 +994,12 @@ export default function Portfolio() {
     // 减仓时成本单价不变
     const newCost = oldCost;
 
-    // 减仓时按比例调整持仓收益
+    // 持仓收益处理：
+    // - 部分减仓：按比例调整持仓收益
+    // - 清仓（newUnits = 0）：保留原持仓收益作为历史收益，计入累计收益
     const newCumulativeProfit = oldUnits > 0 && newUnits > 0 
       ? oldCumulativeProfit * (newUnits / oldUnits) 
-      : 0;
+      : oldCumulativeProfit; // 清仓时保留原值
 
     // 记录中的持仓金额（用于显示）
     const amount = reduceUnits * netValue;
