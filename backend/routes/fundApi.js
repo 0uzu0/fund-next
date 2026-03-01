@@ -315,7 +315,7 @@ router.get('/api/fund/download', loginRequired, (req, res) => {
 // ---------- 持仓份额（加减仓时写入 position_records，与原项目一致）----------
 router.post('/api/fund/shares', loginRequired, (req, res) => {
   try {
-    const { code, holding_units, cost_per_unit, holding_profit, shares, record_op, amount, units, trade_date, period, fund_name } = req.body || {};
+    const { code, holding_units, cost_per_unit, holding_profit, shares, record_op, amount, units, trade_date, period, fund_name, fee_rate, fixed_fee, fee_type } = req.body || {};
     const c = String(code || '').trim();
     if (!c) return res.status(400).json({ success: false, message: '请提供基金代码' });
     const userId = getCurrentUserId(req);
@@ -355,12 +355,15 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
       const amt = amount != null ? Number(amount) : NaN;
       const unitsValue = units != null ? Number(units) : null;
       const tDate = (trade_date && String(trade_date).trim()) || '';
+      const feeRateValue = fee_rate != null ? Number(fee_rate) : 0;
+      const fixedFeeValue = fixed_fee != null ? Number(fixed_fee) : 0;
+      const feeTypeValue = fee_type || 'rate';
       if (Number.isFinite(amt) && tDate) {
         try {
           db.prepare(
-            `INSERT INTO position_records (user_id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).run(userId, c, prevFundName, record_op, amt, unitsValue, tDate, (period && String(period).trim()) || '', prevHoldingUnits, prevCostPerUnit, holdingUnits, costPerUnit);
+            `INSERT INTO position_records (user_id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit, fee_rate, fixed_fee, fee_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(userId, c, prevFundName, record_op, amt, unitsValue, tDate, (period && String(period).trim()) || '', prevHoldingUnits, prevCostPerUnit, holdingUnits, costPerUnit, feeRateValue, fixedFeeValue, feeTypeValue);
         } catch (err) {
           console.warn('Insert position record failed:', err);
         }

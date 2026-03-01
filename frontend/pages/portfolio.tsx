@@ -124,8 +124,11 @@ export default function Portfolio() {
   const [reducePositionUnits, setReducePositionUnits] = useState('');
   const [reducePositionFeePreset, setReducePositionFeePreset] = useState<typeof SELL_FEE_PRESETS[number] | 'custom'>(0);
   const [reducePositionFeeCustom, setReducePositionFeeCustom] = useState('');
+  const [reducePositionFeeType, setReducePositionFeeType] = useState<'rate' | 'fixed'>('rate'); // 费率或固定手续费
+  const [reducePositionFixedFee, setReducePositionFixedFee] = useState(''); // 固定手续费金额
   const getAddPositionFeeRate = (): number => addPositionFeePreset === 'custom' ? (parseFloat(addPositionFeeCustom) || 0) : addPositionFeePreset;
   const getReducePositionFeeRate = (): number => reducePositionFeePreset === 'custom' ? (parseFloat(reducePositionFeeCustom) || 0) : reducePositionFeePreset;
+  const getReducePositionFixedFee = (): number => parseFloat(reducePositionFixedFee) || 0;
   const [reducePositionTime, setReducePositionTime] = useState<{ date: string; period: 'before15' | 'after15' } | null>(null);
   const [reducePositionLoading, setReducePositionLoading] = useState(false);
   const [reducePositionTimePickerOpen, setReducePositionTimePickerOpen] = useState(false);
@@ -728,6 +731,8 @@ export default function Portfolio() {
     setReducePositionUnits('');
     setReducePositionFeePreset(0);
     setReducePositionFeeCustom('');
+    setReducePositionFeeType('rate');
+    setReducePositionFixedFee('');
     setReducePositionTime(null);
   };
 
@@ -952,8 +957,14 @@ export default function Portfolio() {
     const sellDate = reducePositionTime.date;
     const isAfter15 = reducePositionTime.period === 'after15';
     
-    // 计算赎回费率（预设或自定义）
-    const reduceFeeRate = getReducePositionFeeRate();
+    // 根据手续费类型计算费用
+    let feeRate = 0;
+    let fixedFee = 0;
+    if (reducePositionFeeType === 'rate') {
+      feeRate = getReducePositionFeeRate();
+    } else {
+      fixedFee = getReducePositionFixedFee();
+    }
     
     // 根据交易规则获取净值（历史净值不变，可缓存）
     let netValue = parseNetValue(reducePositionRow.netValue) || 1;
@@ -1005,7 +1016,9 @@ export default function Portfolio() {
           record_op: 'reduce',
           amount, // 持仓金额（用于记录显示）
           units: reduceUnits, // 减仓份额
-          fee_rate: reduceFeeRate, // 赎回费率（预设或自定义）
+          fee_rate: feeRate, // 赎回费率（预设或自定义）
+          fixed_fee: fixedFee, // 固定手续费
+          fee_type: reducePositionFeeType, // 手续费类型
           trade_date: sellDate,
           period: isAfter15 ? 'after15' : 'before15',
           fund_name: reducePositionRow.name,
@@ -2103,62 +2116,108 @@ export default function Portfolio() {
                     <span style={{ color: 'var(--text-dim)' }}>份</span>
                   </div>
                   <div style={{ marginTop: 12 }}>
-                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>赎回费率</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 8 }}>
-                      {SELL_FEE_PRESETS.map((rate) => (
-                        <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <div style={{ color: 'var(--text-main)', marginBottom: 8 }}>手续费</div>
+                    {/* 费率/固定手续费切换 */}
+                    <div style={{ display: 'flex', gap: 16, marginBottom: 8 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="reducePositionFeeType"
+                          checked={reducePositionFeeType === 'rate'}
+                          onChange={() => setReducePositionFeeType('rate')}
+                          style={{ marginRight: 6, width: 16, height: 16, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ color: 'var(--text-main)' }}>费率</span>
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="reducePositionFeeType"
+                          checked={reducePositionFeeType === 'fixed'}
+                          onChange={() => setReducePositionFeeType('fixed')}
+                          style={{ marginRight: 6, width: 16, height: 16, accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ color: 'var(--text-main)' }}>固定手续费</span>
+                      </label>
+                    </div>
+                    {/* 费率选择 */}
+                    {reducePositionFeeType === 'rate' && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+                        {SELL_FEE_PRESETS.map((rate) => (
+                          <label key={rate} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                            <input
+                              type="radio"
+                              name="reducePositionFeeRate"
+                              checked={reducePositionFeePreset === rate}
+                              onChange={() => { setReducePositionFeePreset(rate); setReducePositionFeeCustom(''); }}
+                              style={{ marginRight: 6, width: 16, height: 16, accentColor: 'var(--accent)' }}
+                            />
+                            <span style={{ color: 'var(--text-main)' }}>{rate}%</span>
+                          </label>
+                        ))}
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}>
                           <input
                             type="radio"
                             name="reducePositionFeeRate"
-                            checked={reducePositionFeePreset === rate}
-                            onChange={() => { setReducePositionFeePreset(rate); setReducePositionFeeCustom(''); }}
-                            style={{ marginRight: 6, width: 18, height: 18, accentColor: 'var(--accent)' }}
+                            checked={reducePositionFeePreset === 'custom'}
+                            onChange={() => setReducePositionFeePreset('custom')}
+                            style={{ width: 16, height: 16, accentColor: 'var(--accent)' }}
                           />
-                          <span style={{ color: 'var(--text-main)' }}>{rate}%</span>
+                          <span style={{ color: 'var(--text-main)' }}>自定义</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            placeholder="%"
+                            value={reducePositionFeePreset === 'custom' ? reducePositionFeeCustom : ''}
+                            onChange={(e) => { setReducePositionFeePreset('custom'); setReducePositionFeeCustom(e.target.value); }}
+                            onFocus={() => setReducePositionFeePreset('custom')}
+                            disabled={reducePositionFeePreset !== 'custom'}
+                            style={{ width: 64, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
+                          />
+                          <span style={{ color: 'var(--text-dim)' }}>%</span>
                         </label>
-                      ))}
-                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: 6 }}>
-                        <input
-                          type="radio"
-                          name="reducePositionFeeRate"
-                          checked={reducePositionFeePreset === 'custom'}
-                          onChange={() => setReducePositionFeePreset('custom')}
-                          style={{ width: 18, height: 18, accentColor: 'var(--accent)' }}
-                        />
-                        <span style={{ color: 'var(--text-main)' }}>自定义</span>
+                      </div>
+                    )}
+                    {/* 固定手续费输入 */}
+                    {reducePositionFeeType === 'fixed' && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: 'var(--text-dim)' }}>¥</span>
                         <input
                           type="number"
                           step="0.01"
                           min="0"
-                          max="100"
-                          placeholder="%"
-                          value={reducePositionFeePreset === 'custom' ? reducePositionFeeCustom : ''}
-                          onChange={(e) => { setReducePositionFeePreset('custom'); setReducePositionFeeCustom(e.target.value); }}
-                          onFocus={() => setReducePositionFeePreset('custom')}
-                          disabled={reducePositionFeePreset !== 'custom'}
-                          style={{ width: 64, padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
+                          placeholder="输入固定手续费金额"
+                          value={reducePositionFixedFee}
+                          onChange={(e) => setReducePositionFixedFee(e.target.value)}
+                          style={{ flex: 1, maxWidth: 200, padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
                         />
-                        <span style={{ color: 'var(--text-dim)' }}>%</span>
-                      </label>
-                    </div>
+                      </div>
+                    )}
                   </div>
                   {reducePositionUnits && reducePositionTime && (
                     <div style={{ marginTop: 8, color: 'var(--text-dim)' }}>
                       {(() => {
-                        const feeRate = getReducePositionFeeRate();
                         const units = parseFloat(reducePositionUnits) || 0;
                         const netValue = parseNetValue(reducePositionRow.netValue) || 1;
                         const oldUnits = toNum(reducePositionRow.holding_units);
                         const newUnits = Math.max(0, oldUnits - units);
                         const amount = units * netValue;
-                        const fee = amount * feeRate / 100;
+                        // 根据手续费类型计算费用
+                        const fee = reducePositionFeeType === 'fixed' 
+                          ? getReducePositionFixedFee() 
+                          : amount * getReducePositionFeeRate() / 100;
                         // 持有金额 = 持有份额 × 昨日净值
                         const newHoldingAmount = newUnits * netValue;
                         return (
                           <>
                             <div>同步减仓金额：¥{amount.toFixed(2)}</div>
-                            {feeRate > 0 && (
-                              <div style={{ marginTop: 4 }}>手续费：¥{fee.toFixed(2)}</div>
+                            {fee > 0 && (
+                              <div style={{ marginTop: 4 }}>
+                                手续费：¥{fee.toFixed(2)}
+                                {reducePositionFeeType === 'fixed' && ' (固定)'}
+                              </div>
                             )}
                             <div className="position-modal-value" style={{ marginTop: 4, fontWeight: 500, color: 'var(--text-main)' }}>
                               同步减仓后持仓金额：¥{newHoldingAmount.toFixed(2)}

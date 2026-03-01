@@ -193,6 +193,19 @@ async function initDb() {
     /* 表不存在时忽略 */
   }
 
+  // 迁移：为已存在的 position_records 表补充手续费相关字段
+  try {
+    const info = wrapper.prepare('PRAGMA table_info(position_records)').all();
+    const hasFeeRate = info.some((col) => col.name === 'fee_rate');
+    const hasFixedFee = info.some((col) => col.name === 'fixed_fee');
+    const hasFeeType = info.some((col) => col.name === 'fee_type');
+    if (!hasFeeRate) wrapper.exec('ALTER TABLE position_records ADD COLUMN fee_rate REAL DEFAULT 0');
+    if (!hasFixedFee) wrapper.exec('ALTER TABLE position_records ADD COLUMN fixed_fee REAL DEFAULT 0');
+    if (!hasFeeType) wrapper.exec("ALTER TABLE position_records ADD COLUMN fee_type TEXT DEFAULT 'rate'");
+  } catch (e) {
+    /* 表不存在时忽略 */
+  }
+
   // 迁移：为已存在的 user_funds 表补充 holding_profit 列
   try {
     const info = wrapper.prepare('PRAGMA table_info(user_funds)').all();
