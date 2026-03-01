@@ -314,9 +314,9 @@ export default function Portfolio() {
     if (selectedGroupId == null) return;
     const source = overrideSource ?? dataSource;
     const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}${noCache ? `&_t=${Date.now()}` : ''}`;
-    apiGet<{ success: boolean; rows?: FundRow[] }>(url, {
-      cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` },
-    })
+    // noCache 时跳过缓存，直接请求
+    const cacheConfig = noCache ? undefined : { cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` } };
+    apiGet<{ success: boolean; rows?: FundRow[] }>(url, cacheConfig)
       .then((res) => {
         if (res.success && res.rows) setWatchlistRows(res.rows);
         else setWatchlistRows([]);
@@ -435,28 +435,27 @@ export default function Portfolio() {
         if (d.success) {
           setShowDeleteFundModal(false);
           setDeleteSelectedCodes([]);
-          // 清除所有相关缓存（包括 fund-list）
-          clearCache('/api/portfolio');
+          // 清除所有相关缓存
+          clearCache('portfolio/table');
+          clearCache('portfolio/fund-list');
           clearCache('/api/fund/data');
           clearCache('/api/fund/groups');
           clearCache('/api/fund/chart-data');
-          clearCache('/fund-list');
           // 清除 sessionStorage 中的图表数据
           if (typeof window !== 'undefined') {
             sessionStorage.removeItem('fund_chart_preload_data');
             sessionStorage.removeItem('fund_chart_preload_timestamp');
           }
-          // 立即清空 fundList、fundRows 和 watchlistRows，强制重新加载
-          setFundList([]);
-          setFundRows([]);
-          setWatchlistRows([]);
           // 如果被删除的基金包含当前选中的图表基金，重置图表基金
           if (chartFund && deleteSelectedCodes.includes(chartFund.code)) {
             setChartFund(null);
           }
-          // 立即刷新数据（强制跳过缓存）
+          // 刷新持有基金数据
           fetchData();
-          fetchWatchlist(undefined, true);
+          // 强制刷新自选基金数据（跳过缓存）
+          if (selectedGroupId != null) {
+            fetchWatchlist(undefined, true);
+          }
         }
       })
       .catch(() => toast.error('删除失败'))
@@ -762,6 +761,42 @@ export default function Portfolio() {
       return;
     }
 
+    // 持仓金额为0时，清空持仓并从持有基金移除
+    if (holdingAmount === 0) {
+      setEditHoldingError('');
+      setEditHoldingLoading(true);
+      try {
+        // 设置份额为0，is_hold为0，该基金将从持有基金列表中移除
+        const res = await fetch(`${API}/api/fund/shares`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ 
+            code: editHoldingRow.code, 
+            holding_units: 0, 
+            cost_per_unit: 0, 
+            holding_profit: 0 
+          }),
+        });
+        const d = await res.json();
+        if (d.success) {
+          setEditHoldingRow(null);
+          clearCache('portfolio/table');
+          clearCache('/api/fund/data');
+          fetchData();
+          fetchWatchlist();
+          toast.success('已清空持仓');
+        } else {
+          setEditHoldingError(d.message || '保存失败');
+        }
+      } catch (e) {
+        setEditHoldingError('网络错误');
+      } finally {
+        setEditHoldingLoading(false);
+      }
+      return;
+    }
+
     // 获取昨日净值用于计算
     const netValue = parseNetValue(editHoldingRow.netValue) || 1;
     const { units, costPerUnit } = calculateHoldingData(holdingAmount, cumulativeProfit, netValue);
@@ -830,7 +865,6 @@ export default function Portfolio() {
     
     const oldUnits = toNum(addPositionRow.holding_units);
     const oldCost = toNum(addPositionRow.cost_per_unit) || 1;
-    const oldCumulativeProfit = toNum((addPositionRow as any).holding_profit);
 
     // 计算手续费（含预设与自定义费率）
     const addFeeRate = getAddPositionFeeRate();
@@ -843,13 +877,25 @@ export default function Portfolio() {
     const newUnitsRaw = oldUnits + addUnits;
     const newUnits = Math.round(newUnitsRaw * 100) / 100;
 
-    // 加仓时累计收益不变（因为加仓不影响已实现收益）
-    const newCumulativeProfit = oldCumulativeProfit;
+    // 加仓时计算新的加权平均成本
+    // 新成本 = (原份额×原成本 + 新份额×买入净值) / 新总份额
+    // 这样累计收益 = (昨日净值 - 新成本) × 新份额 会自动正确
+    let newCost = oldCost;
+    if (oldUnits > 0 && newUnits > 0) {
+      const oldTotalCost = oldUnits * oldCost;
+      const newTotalCost = oldTotalCost + addUnits * netValue;
+      newCost = newTotalCost / newUnits;
+      newCost = Math.round(newCost * 10000) / 10000; // 保留4位小数
+    } else if (newUnits > 0) {
+      // 首次加仓，成本等于买入净值
+      newCost = Math.round(netValue * 10000) / 10000;
+    }
 
-    // 按照新公式计算持仓成本：持仓成本 = 累计收益 / 持有份额 + 昨日净值
-    // 但加仓时需要保持成本单价不变（加仓不改变原有份额的成本）
-    // 新的持仓成本 = 原持仓成本（加仓不改变成本单价）
-    const newCost = oldCost;
+    // 累计收益不再单独存储，而是通过 (净值 - 成本) × 份额 动态计算
+    // holding_profit 仅在净值无效时作为备用
+    const oldCumulativeProfit = toNum((addPositionRow as any).holding_profit);
+    // 按比例调整 holding_profit（仅作为备用值）
+    const newCumulativeProfit = oldUnits > 0 ? oldCumulativeProfit * (newUnits / oldUnits) : 0;
 
     setAddPositionLoading(true);
     try {
@@ -939,9 +985,11 @@ export default function Portfolio() {
     // 减仓时成本单价不变
     const newCost = oldCost;
 
-    // 新的累计收益 = (持仓成本 - 昨日净值) × 新的持有份额
-    // 根据新公式：持仓成本 = 累计收益 / 持有份额 + 昨日净值，反推
-    const newCumulativeProfit = newUnits > 0 ? (newCost - netValue) * newUnits : 0;
+    // 累计收益通过公式动态计算：(净值 - 成本) × 份额
+    // holding_profit 仅作为净值无效时的备用值，按比例调整
+    const newCumulativeProfit = oldUnits > 0 && newUnits > 0 
+      ? oldCumulativeProfit * (newUnits / oldUnits) 
+      : 0;
 
     // 记录中的持仓金额（用于显示）
     const amount = reduceUnits * netValue;

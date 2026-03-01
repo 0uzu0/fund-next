@@ -142,16 +142,22 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
         try {
           const quote = await fundQuotes.getFundQuote(h.fund_code);
           if (quote) {
-            const currentValue = (h.holding_units || 0) * (quote.nav || 0);
-            const costValue = (h.holding_units || 0) * (h.cost_per_unit || 0);
-            const profit = currentValue - costValue;
+            const holdingUnits = h.holding_units || 0;
+            const costPerUnit = h.cost_per_unit || 0;
+            const currentValue = holdingUnits * (quote.nav || 0);
+            const costValue = holdingUnits * costPerUnit;
+            // 今日实际收益 = 持有份额 × 昨日净值 × 今日涨跌幅
+            const todayActualProfit = holdingUnits * (quote.nav || 0) * ((quote.dailyReturn || 0) / 100);
+            // 累计收益 = (昨日净值 - 持仓成本) × 持有份额
+            // 这是动态计算的，与前端持有基金页面显示一致
+            const cumulativeProfit = ((quote.nav || 0) - costPerUnit) * holdingUnits;
 
             return {
               code: h.fund_code,
               name: h.fund_name,
               shares: h.shares,
-              holding_units: h.holding_units,
-              cost_per_unit: h.cost_per_unit,
+              holding_units: holdingUnits,
+              cost_per_unit: costPerUnit,
               stored_holding_profit: h.holding_profit,
               is_hold: !!h.is_hold,
               chart_default: !!h.chart_default,
@@ -165,8 +171,11 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
               calculated: {
                 current_value: Math.round(currentValue * 100) / 100,
                 cost_value: Math.round(costValue * 100) / 100,
-                profit: Math.round(profit * 100) / 100,
-                profit_rate: costValue > 0 ? Math.round((profit / costValue) * 10000) / 100 : 0
+                // 累计收益 = (净值 - 成本) × 份额
+                profit: Math.round(cumulativeProfit * 100) / 100,
+                // 今日实际收益
+                today_profit: Math.round(todayActualProfit * 100) / 100,
+                profit_rate: costValue > 0 ? Math.round((cumulativeProfit / costValue) * 10000) / 100 : 0
               }
             };
           }
@@ -190,10 +199,12 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
     );
 
     // 计算汇总数据
+    // 总累计收益 = 所有持有基金的累计收益之和
     const validHoldings = holdingsWithQuotes.filter(h => h.calculated !== null);
     const totalValue = validHoldings.reduce((sum, h) => sum + (h.calculated?.current_value || 0), 0);
     const totalCost = validHoldings.reduce((sum, h) => sum + (h.calculated?.cost_value || 0), 0);
-    const totalProfit = totalValue - totalCost;
+    const totalProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.profit || 0), 0);
+    const totalTodayProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.today_profit || 0), 0);
 
     res.json({
       success: true,
@@ -207,6 +218,7 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
           total_value: Math.round(totalValue * 100) / 100,
           total_cost: Math.round(totalCost * 100) / 100,
           total_profit: Math.round(totalProfit * 100) / 100,
+          today_profit: Math.round(totalTodayProfit * 100) / 100,
           profit_rate: totalCost > 0 ? Math.round((totalProfit / totalCost) * 10000) / 100 : 0
         }
       }

@@ -716,10 +716,10 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
       const list = [];
       for (const [code, r] of Object.entries(fundMapForHolding)) {
         const meta = fundRows.find(x => x.fund_code === code);
-        // 在没有净值数据时，持有金额无法计算，设为0
-        // 但仍然显示持有份额和成本单价
-        // 累计收益使用持仓收益字段
+        const holdingUnits = Number(r.holding_units) || 0;
         const holdingProfit = r.holding_profit || 0;
+        // 持有份额为0时，累计收益为0（已清仓）
+        const cumulative = holdingUnits <= 0 ? 0 : Number(holdingProfit);
         list.push({
           code: String(code),
           name: meta ? String(meta.fund_name) : `基金${code}`,
@@ -728,13 +728,13 @@ router.get('/api/portfolio/table', loginRequired, async (req, res) => {
           estPct: 0,
           actualAmount: 0,
           actualPct: 0,
-          cumulative: Number(holdingProfit),
+          cumulative,
           netValue: '—',
           nowTime: '—',
           dayOfGrowth: '—',
           consecutiveInfo: '—',
           monthlyInfo: '—',
-          holding_units: Number(r.holding_units) || 0,
+          holding_units: holdingUnits,
           cost_per_unit: Number(r.cost_per_unit) || 1,
           holding_profit: Number(holdingProfit),
           estimateDate: '',
