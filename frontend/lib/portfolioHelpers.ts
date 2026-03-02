@@ -3,6 +3,59 @@
  * 供 portfolio、EditHoldingModal、加仓减仓等复用
  */
 
+// 2024-2026年A股节假日（日期格式：YYYY-MM-DD）
+// 来源：沪深交易所公告
+const HOLIDAYS_2024 = [
+  '2024-01-01', // 元旦
+  '2024-02-09', '2024-02-10', '2024-02-11', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-15', '2024-02-16', '2024-02-17', // 春节
+  '2024-04-04', '2024-04-05', '2024-04-06', // 清明
+  '2024-05-01', '2024-05-02', '2024-05-03', '2024-05-04', '2024-05-05', // 劳动节
+  '2024-06-08', '2024-06-09', '2024-06-10', // 端午
+  '2024-09-15', '2024-09-16', '2024-09-17', // 中秋
+  '2024-10-01', '2024-10-02', '2024-10-03', '2024-10-04', '2024-10-05', '2024-10-06', '2024-10-07', // 国庆
+];
+
+const HOLIDAYS_2025 = [
+  '2025-01-01', // 元旦
+  '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-01', '2025-02-02', '2025-02-03', '2025-02-04', // 春节
+  '2025-04-04', '2025-04-05', '2025-04-06', // 清明
+  '2025-05-01', '2025-05-02', '2025-05-03', '2025-05-04', '2025-05-05', // 劳动节
+  '2025-05-31', '2025-06-01', '2025-06-02', // 端午
+  '2025-10-01', '2025-10-02', '2025-10-03', '2025-10-04', '2025-10-05', '2025-10-06', '2025-10-07', '2025-10-08', // 国庆+中秋
+];
+
+const HOLIDAYS_2026 = [
+  '2026-01-01', '2026-01-02', '2026-01-03', // 元旦
+  '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19', '2026-02-20', '2026-02-21', '2026-02-22', // 春节
+  '2026-04-05', '2026-04-06', '2026-04-07', // 清明
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05', // 劳动节
+  '2026-05-31', '2026-06-01', '2026-06-02', // 端午
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', // 国庆+中秋
+];
+
+const ALL_HOLIDAYS = new Set([...HOLIDAYS_2024, ...HOLIDAYS_2025, ...HOLIDAYS_2026]);
+
+/** 判断某日期是否为交易日（排除周末和节假日） */
+export function isTradingDay(date: Date = new Date()): boolean {
+  const day = date.getDay();
+  // 0=周日, 6=周六
+  if (day === 0 || day === 6) return false;
+  const dateStr = date.toISOString().slice(0, 10);
+  if (ALL_HOLIDAYS.has(dateStr)) return false;
+  return true;
+}
+
+/** 判断当前是否处于交易时段（9:30-15:00，交易日） */
+export function isInTradingHours(): boolean {
+  if (!isTradingDay()) return false;
+  const now = new Date();
+  const hour = now.getHours();
+  const min = now.getMinutes();
+  const timeNum = hour * 100 + min;
+  // 9:30-11:30, 13:00-15:00
+  return (timeNum >= 930 && timeNum <= 1130) || (timeNum >= 1300 && timeNum <= 1500);
+}
+
 /** 从展示字符串（如 "1.2345(02-15)"）解析出净值数字 */
 export function parseNetValue(s: string | undefined): number {
   if (s == null || s === '' || s === '—') return 0;
@@ -22,15 +75,26 @@ export function getTodayStr(): string {
 }
 
 /**
- * 是否“次日9:30之后估值数据未更新”：当前时间已过当日 9:30 且估值日期早于当日则视为未更新，应显示 "-"
+ * 是否应隐藏预估数据
+ * 规则：
+ * 1. 非交易日（周末/节假日）时隐藏
+ * 2. 交易日 0:00-9:30 尚未开盘，隐藏
+ * 3. 交易日 9:30-24:00 显示（若估值日期为今天）
  */
 export function isEstimateStale(estimateDate: string | undefined): boolean {
+  // 非交易日（周末/节假日）时隐藏预估数据
+  if (!isTradingDay()) return true;
+
   const now = new Date();
   const today = getTodayStr();
   const hour = now.getHours();
   const min = now.getMinutes();
   const afterCutoff = hour > 9 || (hour === 9 && min >= 30);
-  if (!afterCutoff) return false;
+
+  // 交易日 0:00-9:30 尚未开盘，隐藏预估数据
+  if (!afterCutoff) return true;
+
+  // 交易日 9:30-24:00，估值日期为空或早于今天则隐藏
   if (!estimateDate || String(estimateDate).trim() === '') return true;
   return String(estimateDate).trim() < today;
 }
