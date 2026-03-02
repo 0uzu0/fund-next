@@ -388,7 +388,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
       // 使用 setTimeout 延迟执行，确保不阻塞主线程
       setTimeout(() => {
         // 使用 API 客户端，带缓存（10分钟）
-        apiGet('/api/fund/chart-data?code=${chartFund.code}`, {
+        apiGet(`/api/fund/chart-data?code=${chartFund.code}`, {
           cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
         })
           .then((d) => {
