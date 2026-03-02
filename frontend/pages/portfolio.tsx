@@ -4,7 +4,7 @@ import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import { useChartData } from '../hooks/useChartData';
 import { useTableSort } from '../hooks/useTableSort';
-import { apiGet, apiPost, apiDelete, clearCache, API_BASE } from '../utils/apiClient';
+import { apiGet, apiPost, apiDelete, clearCache, getApiBase } from '../utils/apiClient';
 import { toast } from '../utils/toast';
 import type { FundRow, Summary, Group, DataSourceOption } from '../types/portfolio';
 import { toNum, formatMoney, formatPct, formatYuan } from '../lib/format';
@@ -34,8 +34,6 @@ const FundChart = dynamic(() => import('../components/FundChart'), {
   loading: () => null,
   ssr: false,
 });
-
-const API = API_BASE;
 
 export default function Portfolio() {
   const router = useRouter();
@@ -169,7 +167,7 @@ export default function Portfolio() {
 
   const fetchAuth = useCallback(() => {
     // 使用 API 客户端，带缓存（10分钟）
-    return apiGet<{ username: string }>(`${API}/api/auth/me`, {
+    return apiGet<{ username: string }>(`/api/auth/me`, {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then((d) => {
@@ -183,16 +181,16 @@ export default function Portfolio() {
     const source = overrideSource ?? dataSource;
 
     Promise.all([
-      apiGet(`${API}/api/portfolio/table?group=&holdOnly=1&source=${source}`, {
+      apiGet(`/api/portfolio/table?group=&holdOnly=1&source=${source}`, {
         cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
       }),
-      apiGet(`${API}/api/fund/data`, {
+      apiGet(`/api/fund/data`, {
         cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
       }),
-      apiGet(`${API}/api/portfolio/fund-list?_t=${Date.now()}`, {
+      apiGet(`/api/portfolio/fund-list?_t=${Date.now()}`, {
         cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
       }),
-      apiGet(`${API}/api/fund/groups`, {
+      apiGet(`/api/fund/groups`, {
         cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
       }),
     ]).then(([tableRes, fundMapRes, listRes, groupsRes]) => {
@@ -312,7 +310,7 @@ export default function Portfolio() {
   const fetchWatchlist = useCallback((overrideSource?: 'fund123' | 'tiantian', noCache?: boolean) => {
     if (selectedGroupId == null) return;
     const source = overrideSource ?? dataSource;
-    const url = `${API}/api/portfolio/table?group=${selectedGroupId}&source=${source}${noCache ? `&_t=${Date.now()}` : ''}`;
+    const url = `/api/portfolio/table?group=${selectedGroupId}&source=${source}${noCache ? `&_t=${Date.now()}` : ''}`;
     // noCache 时跳过缓存，直接请求
     const cacheConfig = noCache ? undefined : { cache: { ttl: 2 * 60 * 1000, key: `portfolio/table:${selectedGroupId}:${source}` } };
     apiGet<{ success: boolean; rows?: FundRow[] }>(url, cacheConfig)
@@ -336,7 +334,7 @@ export default function Portfolio() {
     setDetailHoldings([]);
     setDetailHoldingsCollapsed(false);
     apiGet<{ success: boolean; holdings?: { code: string; name: string; weight: string; change: number | null }[] }>(
-      `${API}/api/fund/holdings?code=${encodeURIComponent(detailRow.code)}`,
+      `/api/fund/holdings?code=${encodeURIComponent(detailRow.code)}`,
       { cache: { ttl: 5 * 60 * 1000 } }
     )
       .then((res) => {
@@ -353,7 +351,7 @@ export default function Portfolio() {
   };
 
   const onExport = () => {
-    window.open(`${API}/api/fund/download`, '_blank');
+    window.open(`/api/fund/download`, '_blank');
   };
 
   const onImport = () => {
@@ -365,7 +363,7 @@ export default function Portfolio() {
       if (!file) return;
       const form = new FormData();
       form.append('file', file);
-      const r = await fetch(`${API}/api/fund/upload`, { method: 'POST', credentials: 'include', body: form });
+      const r = await fetch(`/api/fund/upload`, { method: 'POST', credentials: 'include', body: form });
       const d = await r.json();
       (d.success ? toast.success : toast.error)(d.message || (d.success ? '导入成功' : '导入失败'));
       if (d.success) {
@@ -383,7 +381,7 @@ export default function Portfolio() {
     setSectorSelectedTags([]);
     setShowSectorTagModal(false);
     try {
-      const fundMap = await apiGet<Record<string, { fund_name?: string; sectors?: string[] }>>(`${API}/api/fund/data`, {
+      const fundMap = await apiGet<Record<string, { fund_name?: string; sectors?: string[] }>>(`/api/fund/data`, {
         cache: { ttl: 2 * 60 * 1000 },
       });
       const list = Object.entries(fundMap).map(([code, data]) => ({
@@ -401,7 +399,7 @@ export default function Portfolio() {
   const openDeleteFundModal = async () => {
     setDeleteSelectedCodes([]);
     try {
-      const fundMap = await apiGet<Record<string, { fund_name?: string }>>(`${API}/api/fund/data`, {
+      const fundMap = await apiGet<Record<string, { fund_name?: string }>>(`/api/fund/data`, {
         cache: { ttl: 2 * 60 * 1000 },
       });
       const list = Object.entries(fundMap).map(([code, data]) => ({
@@ -422,7 +420,7 @@ export default function Portfolio() {
     }
     if (!confirm(`确定要删除 ${deleteSelectedCodes.length} 只基金吗？`)) return;
     setDeleteSubmitLoading(true);
-    fetch(`${API}/api/fund/delete`, {
+    fetch(`/api/fund/delete`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -470,7 +468,7 @@ export default function Portfolio() {
     }
     if (sectorOp === 'remove') {
       setSectorSubmitLoading(true);
-      apiPost<{ success: boolean; message?: string }>(`${API}/api/fund/sector/remove`, { codes: sectorSelectedCodes.join(',') })
+      apiPost<{ success: boolean; message?: string }>(`/api/fund/sector/remove`, { codes: sectorSelectedCodes.join(',') })
         .then((d) => {
           (d.success ? toast.success : toast.error)(d.message || (d.success ? '已删除板块标记' : '操作失败'));
           if (d.success) {
@@ -494,7 +492,7 @@ export default function Portfolio() {
       return;
     }
     setSectorSubmitLoading(true);
-    apiPost<{ success: boolean; message?: string }>(`${API}/api/fund/sector`, {
+    apiPost<{ success: boolean; message?: string }>(`/api/fund/sector`, {
       codes: sectorSelectedCodes.join(','),
       sectors: sectorSelectedTags,
     })
@@ -532,7 +530,7 @@ export default function Portfolio() {
     setSuggestLoading(true);
     suggestTimeoutRef.current = setTimeout(() => {
       suggestTimeoutRef.current = null;
-      fetch(`${API}/api/fund/suggest?key=${encodeURIComponent(keyword)}`, { credentials: 'include' })
+      fetch(`/api/fund/suggest?key=${encodeURIComponent(keyword)}`, { credentials: 'include' })
         .then((r) => r.json())
         .then((d) => {
           if (d.success && Array.isArray(d.list)) setSuggestList(d.list);
@@ -552,7 +550,7 @@ export default function Portfolio() {
     if (selectedGroupId == null) return;
     if (!confirm('确定从该分组中移除该基金吗？')) return;
     try {
-      const r = await fetch(`${API}/api/fund/groups/${selectedGroupId}/funds/${encodeURIComponent(code)}`, {
+      const r = await fetch(`/api/fund/groups/${selectedGroupId}/funds/${encodeURIComponent(code)}`, {
         method: 'DELETE',
         credentials: 'include',
       });
@@ -595,7 +593,7 @@ export default function Portfolio() {
     const fundName = parseNameFromInput(addInput);
     setAddLoading(true);
     try {
-      const r = await fetch(`${API}/api/fund/groups/${selectedGroupId}/funds`, {
+      const r = await fetch(`/api/fund/groups/${selectedGroupId}/funds`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -631,7 +629,7 @@ export default function Portfolio() {
     }
     setNewGroupLoading(true);
     try {
-      const r = await fetch(`${API}/api/fund/groups`, {
+      const r = await fetch(`/api/fund/groups`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -642,9 +640,9 @@ export default function Portfolio() {
         setShowNewGroupModal(false);
         setNewGroupName('');
         // 清除分组列表缓存，强制刷新
-        clearCache(`${API}/api/fund/groups`);
+        clearCache(`/api/fund/groups`);
         // 重新获取分组列表
-        apiGet(`${API}/api/fund/groups`, {
+        apiGet(`/api/fund/groups`, {
           cache: { ttl: 10 * 60 * 1000 },
         }).then((groupsRes) => {
           if (groupsRes.success && groupsRes.groups && groupsRes.groups.length) {
@@ -671,14 +669,14 @@ export default function Portfolio() {
   async function onDeleteGroup(id: number) {
     setDeletingGroupId(id);
     try {
-      const r = await fetch(`${API}/api/fund/groups/${id}`, { method: 'DELETE', credentials: 'include' });
+      const r = await fetch(`/api/fund/groups/${id}`, { method: 'DELETE', credentials: 'include' });
       const d = await r.json();
       if (d.success) {
         setShowDeleteGroupModal(false);
         // 清除分组列表缓存，强制刷新
-        clearCache(`${API}/api/fund/groups`);
+        clearCache(`/api/fund/groups`);
         // 重新获取分组列表
-        apiGet(`${API}/api/fund/groups`, {
+        apiGet(`/api/fund/groups`, {
           cache: { ttl: 10 * 60 * 1000 },
         }).then((groupsRes) => {
           if (groupsRes.success && groupsRes.groups && groupsRes.groups.length) {
@@ -771,7 +769,7 @@ export default function Portfolio() {
         setEditHoldingError('');
         setEditHoldingLoading(true);
         try {
-          const res = await fetch(`${API}/api/fund/shares`, {
+          const res = await fetch(`/api/fund/shares`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
@@ -804,7 +802,7 @@ export default function Portfolio() {
       setEditHoldingError('');
       setEditHoldingLoading(true);
       try {
-        const res = await fetch(`${API}/api/fund/shares`, {
+        const res = await fetch(`/api/fund/shares`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -849,7 +847,7 @@ export default function Portfolio() {
     const costRounded = Math.round(costPerUnit * 10000) / 10000;
     const profitRounded = Math.round(cumulativeProfit * 100) / 100;
     try {
-      const res = await fetch(`${API}/api/fund/shares`, {
+      const res = await fetch(`/api/fund/shares`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -890,7 +888,7 @@ export default function Portfolio() {
     let netValue = parseNetValue(addPositionRow.netValue) || 1;
     try {
       const netValueData = await apiGet<{ success: boolean; netValue?: number }>(
-        `${API}/api/fund/net-value?code=${encodeURIComponent(addPositionRow.code)}&trade_date=${buyDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
+        `/api/fund/net-value?code=${encodeURIComponent(addPositionRow.code)}&trade_date=${buyDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
         { cache: { ttl: 24 * 60 * 60 * 1000, key: `net-value:${addPositionRow.code}:${buyDate}:${isAfter15 ? 'after15' : 'before15'}` } }
       );
       if (netValueData.success && netValueData.netValue != null && netValueData.netValue > 0) {
@@ -936,7 +934,7 @@ export default function Portfolio() {
 
     setAddPositionLoading(true);
     try {
-      const res = await fetch(`${API}/api/fund/shares`, {
+      const res = await fetch(`/api/fund/shares`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1004,7 +1002,7 @@ export default function Portfolio() {
     let netValue = parseNetValue(reducePositionRow.netValue) || 1;
     try {
       const netValueData = await apiGet<{ success: boolean; netValue?: number }>(
-        `${API}/api/fund/net-value?code=${encodeURIComponent(reducePositionRow.code)}&trade_date=${sellDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
+        `/api/fund/net-value?code=${encodeURIComponent(reducePositionRow.code)}&trade_date=${sellDate}&period=${isAfter15 ? 'after15' : 'before15'}`,
         { cache: { ttl: 24 * 60 * 60 * 1000, key: `net-value:${reducePositionRow.code}:${sellDate}:${isAfter15 ? 'after15' : 'before15'}` } }
       );
       if (netValueData.success && netValueData.netValue != null && netValueData.netValue > 0) {
@@ -1038,7 +1036,7 @@ export default function Portfolio() {
 
     setReducePositionLoading(true);
     try {
-      const res = await fetch(`${API}/api/fund/shares`, {
+      const res = await fetch(`/api/fund/shares`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -2604,7 +2602,7 @@ export default function Portfolio() {
                           try {
                             const results = await Promise.all(
                               sectorSelectedCodes.map(async (code) => {
-                                const r = await fetch(`${API}/api/fund/groups/${group.id}/funds`, {
+                                const r = await fetch(`/api/fund/groups/${group.id}/funds`, {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
                                   credentials: 'include',

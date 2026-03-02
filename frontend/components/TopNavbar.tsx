@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useState, useEffect, memo } from 'react';
-import { apiGet } from '../utils/apiClient';
+import { apiGet, getApiBase } from '../utils/apiClient';
 
 const LYRICS = [
   '总要有一首我的歌,大声唱过,再看天地辽阔——————《一颗苹果》',
@@ -12,16 +12,14 @@ function TopNavbar() {
   const [username, setUsername] = useState('');
   const [lyric, setLyric] = useState(LYRICS[0]);
 
-  const apiBase = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
-
   useEffect(() => {
     // 使用 API 客户端，带缓存（10分钟）
-    apiGet<{ username: string }>(apiBase + '/api/auth/me', {
+    apiGet<{ username: string }>('/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then((d) => d && setUsername(d.username))
       .catch(() => {});
-  }, [apiBase]);
+  }, []);
 
   useEffect(() => {
     const i = setInterval(() => {
@@ -34,7 +32,8 @@ function TopNavbar() {
   }, []);
 
   const logout = () => {
-    fetch(apiBase + '/api/auth/logout', { method: 'POST', credentials: 'include' })
+    const apiBase = getApiBase();
+    fetch(`${apiBase}/api/auth/logout`, { method: 'POST', credentials: 'include' })
       .then(() => window.location.href = '/login');
   };
 

@@ -112,8 +112,9 @@ export async function apiRequest<T = any>(
     ...fetchOptions
   } = options;
 
-  // 构建完整 URL
-  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${endpoint}`;
+  // 构建完整 URL（使用 getApiBase 支持运行时动态获取）
+  const baseUrl = getApiBase();
+  const url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
   
   // 生成缓存键
   const cacheKey = cache?.key || getCacheKey(url, fetchOptions);

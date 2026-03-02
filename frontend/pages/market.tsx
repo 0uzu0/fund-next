@@ -4,8 +4,6 @@ import Head from 'next/head';
 import dynamic from 'next/dynamic';
 import { apiGet, clearCache } from '../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
-
 type KxItem = { time: string; evaluate: string; title: string; entity?: string };
 
 function Market() {
@@ -19,11 +17,9 @@ function Market() {
     if (skipCache) clearCache('api/market/kx');
     setLoading(true);
     setError(null);
-    const base = (API || '').replace(/\/$/, '');
-    const url = base ? `${base}/api/market/kx?count=20` : '/api/market/kx?count=20';
     
     // 使用 API 客户端，带缓存（5分钟）；刷新时已清缓存
-    apiGet<{ success: boolean; list?: KxItem[]; message?: string }>(url, {
+    apiGet<{ success: boolean; list?: KxItem[]; message?: string }>('/api/market/kx?count=20', {
       cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
     })
       .then((d) => {
@@ -32,7 +28,7 @@ function Market() {
       })
       .catch((e) => {
         if (e.message === 'API_NOT_FOUND' || e.message?.includes('404')) {
-          setError('接口不可用：请先启动后端 (cd backend && npm start)，并在前端根目录设置 .env.local 中 NEXT_PUBLIC_API_URL=http://localhost:8311');
+          setError('接口不可用：请先启动后端 (cd backend && npm start)');
         } else {
           setError('网络错误');
         }
@@ -42,7 +38,7 @@ function Market() {
 
   useEffect(() => {
     // 使用 API 客户端，带缓存（10分钟）
-    apiGet<{ username: string }>(API + '/api/auth/me', {
+    apiGet<{ username: string }>('/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)

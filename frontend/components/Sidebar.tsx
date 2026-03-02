@@ -3,8 +3,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { apiGet } from '../utils/apiClient';
 
-const API = process.env.NEXT_PUBLIC_API_URL || '';
-
 const ITEMS = [
   { href: '/portfolio', icon: '💼', label: '持仓基金' },
   { href: '/position-records', icon: '📋', label: '持仓记录' },
@@ -36,7 +34,7 @@ function Sidebar() {
     // 使用 setTimeout 确保不会阻塞 UI
     setTimeout(() => {
       // 使用 API 客户端检查管理员状态
-      apiGet<{ is_admin?: boolean }>(`${API}/api/auth/me`, {
+      apiGet<{ is_admin?: boolean }>('/api/auth/me', {
         cache: { ttl: 5 * 60 * 1000 },
       })
         .then((data) => {

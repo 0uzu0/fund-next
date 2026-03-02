@@ -10,8 +10,6 @@ const LineChart = dynamic(() => import('../components/LineChart'), {
   ssr: false,
 });
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-
 type IndexRow = {
   name: string;
   value: string;
@@ -41,7 +39,7 @@ function MarketIndices() {
 
   useEffect(() => {
     // 使用 API 客户端，带缓存（10分钟）
-    apiGet<{ username: string }>(apiBase + '/api/auth/me', {
+    apiGet<{ username: string }>('/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)
@@ -51,7 +49,7 @@ function MarketIndices() {
   const loadIndices = useCallback(() => {
     setLoading(true);
     // 使用 API 客户端，带缓存（3分钟）
-    apiGet<{ success: boolean; data?: IndexRow[] }>(apiBase + '/api/indices/global', {
+    apiGet<{ success: boolean; data?: IndexRow[] }>('/api/indices/global', {
       cache: { ttl: 3 * 60 * 1000 }, // 3分钟缓存
     })
       .then((res) => {
@@ -64,7 +62,7 @@ function MarketIndices() {
 
   const loadCharts = useCallback(() => {
     setLoadingChart(true);
-    apiGet<{ success: boolean; data?: TimingData }>(apiBase + '/api/timing', {
+    apiGet<{ success: boolean; data?: TimingData }>('/api/timing', {
       cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
     })
       .then((res) => {

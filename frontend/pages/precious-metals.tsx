@@ -27,8 +27,6 @@ ChartJS.register(
   Filler
 );
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-
 type RealTimeGold = {
   name: string;
   price: string;
@@ -66,7 +64,7 @@ function PreciousMetals() {
 
   useEffect(() => {
     // 使用 API 客户端，带缓存
-    apiGet<{ username: string }>(apiBase + '/api/auth/me', {
+    apiGet<{ username: string }>('/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)
@@ -76,7 +74,7 @@ function PreciousMetals() {
   const loadRealTime = () => {
     setLoadingRealtime(true);
     // 使用 API 客户端，带缓存（3分钟）
-    apiGet<{ success: boolean; data?: RealTimeGold[] }>(apiBase + '/api/gold/real-time', {
+    apiGet<{ success: boolean; data?: RealTimeGold[] }>('/api/gold/real-time', {
       cache: { ttl: 3 * 60 * 1000 }, // 3分钟缓存
     })
       .then((res) => {
@@ -90,7 +88,7 @@ function PreciousMetals() {
   const loadOneDay = () => {
     setLoadingOneDay(true);
     // 使用 API 客户端，带缓存（2分钟）
-    apiGet<{ success: boolean; data?: OneDayGold[] }>(apiBase + '/api/gold/one-day', {
+    apiGet<{ success: boolean; data?: OneDayGold[] }>('/api/gold/one-day', {
       cache: { ttl: 2 * 60 * 1000 }, // 2分钟缓存
     })
       .then((res) => {
@@ -104,7 +102,7 @@ function PreciousMetals() {
   const loadHistory = () => {
     setLoadingHistory(true);
     // 使用 API 客户端，带缓存（10分钟）
-    apiGet<{ success: boolean; data?: HistoryGold[] }>(apiBase + '/api/gold/history', {
+    apiGet<{ success: boolean; data?: HistoryGold[] }>('/api/gold/history', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then((res) => {

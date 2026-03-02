@@ -5,8 +5,6 @@ import { apiGet, apiPost, clearCache } from '../utils/apiClient';
 import { toast } from '../utils/toast';
 import { useTableSort } from '../hooks/useTableSort';
 
-const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-
 type SectorRow = {
   code: string;
   name: string;
@@ -74,7 +72,7 @@ function Sectors() {
 
   useEffect(() => {
     // 使用 API 客户端，带缓存
-    apiGet<{ username: string }>(apiBase + '/api/auth/me', {
+    apiGet<{ username: string }>('/api/auth/me', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then(setAuth)
@@ -84,7 +82,7 @@ function Sectors() {
   const loadSectors = useCallback(() => {
     setSectorsLoading(true);
     // 使用 API 客户端，带缓存（5分钟）
-    apiGet<{ success: boolean; data?: SectorRow[] }>(apiBase + '/api/sectors', {
+    apiGet<{ success: boolean; data?: SectorRow[] }>('/api/sectors', {
       cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
     })
       .then((res) => {
@@ -98,7 +96,7 @@ function Sectors() {
   const loadSectorList = useCallback(() => {
     setSectorListLoading(true);
     // 使用 API 客户端，带缓存（10分钟）
-    apiGet<{ success: boolean; list?: string[] }>(apiBase + '/api/sector-list', {
+    apiGet<{ success: boolean; list?: string[] }>('/api/sector-list', {
       cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
     })
       .then((res) => {
@@ -115,7 +113,7 @@ function Sectors() {
     setSectorFundsLoading(true);
     setSectorFunds([]);
     // 使用 API 客户端，带缓存（5分钟）
-    apiGet<{ success: boolean; data?: SectorFund[] }>(apiBase + '/api/sector/' + sectorId, {
+    apiGet<{ success: boolean; data?: SectorFund[] }>('/api/sector/' + sectorId, {
       cache: { ttl: 5 * 60 * 1000 }, // 5分钟缓存
     })
       .then((res) => {
@@ -132,7 +130,7 @@ function Sectors() {
 
   const loadGroups = useCallback(() => {
     clearCache('api/fund/groups');
-    apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>(apiBase + '/api/fund/groups')
+    apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>('/api/fund/groups')
       .then((res) => {
         if (res.success && Array.isArray(res.groups)) {
           setGroups(res.groups);
@@ -148,7 +146,7 @@ function Sectors() {
   useEffect(() => {
     if (auth && tab === 'query') {
       loadSectorList();
-      apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>(apiBase + '/api/fund/groups', {
+      apiGet<{ success: boolean; groups?: { id: number; name: string; fund_codes: string[]; sort_order: number }[] }>('/api/fund/groups', {
         cache: { ttl: 10 * 60 * 1000 },
       })
         .then((res) => {
@@ -245,7 +243,7 @@ function Sectors() {
     setAddToGroupLoading(true);
     try {
       const d = await apiPost<{ success?: boolean; message?: string }>(
-        `${apiBase}/api/fund/groups/${groupId}/funds`,
+        `/api/fund/groups/${groupId}/funds`,
         { code: selectedFundCode }
       );
       if (d.success) {
