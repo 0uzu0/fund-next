@@ -153,7 +153,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
     // 异步预加载，不阻塞页面
     setTimeout(() => {
       // 使用 API 客户端，带缓存（30分钟）
-      apiGet('/api/fund/chart-data/preload`, {
+      apiGet(`/api/fund/chart-data/preload`, {
         cache: { ttl: 30 * 60 * 1000 }, // 30分钟缓存
       })
         .then((data) => {
@@ -235,7 +235,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         
         // fetch 请求本身是异步的，不会阻塞
         // 使用 API 客户端，带缓存（10分钟）
-        apiGet('/api/fund/chart-data?code=${code}`, {
+        apiGet(`/api/fund/chart-data?code=${code}`, {
           cache: { ttl: 10 * 60 * 1000 }, // 10分钟缓存
           retry: 1, // 重试1次
           signal: abortController.signal, // 支持取消请求
