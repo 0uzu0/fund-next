@@ -55,61 +55,96 @@ function getBkName(sectorId) {
  * 参数 fs: 'm:90 t:3' 表示概念板块，t:2 表示行业板块
  */
 async function fetchSectorsList() {
-  try {
-    const { data } = await axios.get('https://push2.eastmoney.com/api/qt/clist/get', {
-      params: {
-        cb: '',
-        fid: 'f62',
-        po: '1',
-        pz: '100',
-        pn: '1',
-        np: '1',
-        fltt: '2',
-        invt: '2',
-        ut: '8dec03ba335b81bf4ebdf7b29ec27d15',
-        fs: 'm:90 t:3', // t:3 = 概念板块，t:2 = 行业板块
-        fields: 'f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124,f1,f13',
-      },
-      timeout: 20000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
-        'Referer': 'https://quote.eastmoney.com/center/',
-      },
-    });
-    
-    if (!data || !data.data || !data.data.diff) {
-      console.error('概念板块数据格式异常:', data);
-      return [];
-    }
-    
-    const sectors = data.data.diff.map((bk) => {
-      const ratio = bk.f3 != null ? String(bk.f3) : '0';
-      const addMarketCap = bk.f62 != null ? Math.round(bk.f62 / 100000000 * 100) / 100 : 0;
-      const addMarketCap2 = bk.f84 != null ? Math.round(bk.f84 / 100000000 * 100) / 100 : 0;
+  const maxRetries = 3;
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[板块] 开始请求东方财富 API (尝试 ${attempt}/${maxRetries})...`);
       
-      return {
-        code: bk.f12,
-        name: bk.f14,
-        change: ratio + '%',
-        main_inflow: String(addMarketCap) + '亿',
-        main_inflow_pct: bk.f184 != null ? String(Math.round(bk.f184 * 100) / 100) + '%' : 'N/A',
-        small_inflow: String(addMarketCap2) + '亿',
-        small_inflow_pct: bk.f87 != null ? String(Math.round(bk.f87 * 100) / 100) + '%' : 'N/A',
-      };
-    });
-    
-    // 按涨跌幅排序
-    sectors.sort((a, b) => {
-      const pa = parseFloat(String(a.change).replace('%', '')) || -99;
-      const pb = parseFloat(String(b.change).replace('%', '')) || -99;
-      return pb - pa;
-    });
-    
-    return sectors;
-  } catch (e) {
-    console.error('获取概念板块失败:', e.message);
-    return [];
+      const { data } = await axios.get('https://push2.eastmoney.com/api/qt/clist/get', {
+        params: {
+          cb: '',
+          fid: 'f62',
+          po: '1',
+          pz: '100',
+          pn: '1',
+          np: '1',
+          fltt: '2',
+          invt: '2',
+          ut: 'b2884a393a59ad64002292a3e90d46a5',
+          fs: 'm:90 t:3', // t:3 = 概念板块，t:2 = 行业板块
+          fields: 'f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124,f1,f13',
+        },
+        timeout: 30000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://quote.eastmoney.com/center/',
+          'Accept': 'application/json, text/plain, */*',
+          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-site',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+      });
+      
+      console.log('[板块] API 响应状态:', data ? '有数据' : '无数据');
+      
+      if (!data || !data.data || !data.data.diff) {
+        console.error('概念板块数据格式异常:', JSON.stringify(data).substring(0, 500));
+        lastError = new Error('数据格式异常');
+        // 如果数据格式异常，等待后重试
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        return [];
+      }
+      
+      console.log('[板块] 获取到', data.data.diff.length, '条数据');
+      
+      const sectors = data.data.diff.map((bk) => {
+        const ratio = bk.f3 != null ? String(bk.f3) : '0';
+        const addMarketCap = bk.f62 != null ? Math.round(bk.f62 / 100000000 * 100) / 100 : 0;
+        const addMarketCap2 = bk.f84 != null ? Math.round(bk.f84 / 100000000 * 100) / 100 : 0;
+        
+        return {
+          code: bk.f12,
+          name: bk.f14,
+          change: ratio + '%',
+          main_inflow: String(addMarketCap) + '亿',
+          main_inflow_pct: bk.f184 != null ? String(Math.round(bk.f184 * 100) / 100) + '%' : 'N/A',
+          small_inflow: String(addMarketCap2) + '亿',
+          small_inflow_pct: bk.f87 != null ? String(Math.round(bk.f87 * 100) / 100) + '%' : 'N/A',
+        };
+      });
+      
+      // 按涨跌幅排序
+      sectors.sort((a, b) => {
+        const pa = parseFloat(String(a.change).replace('%', '')) || -99;
+        const pb = parseFloat(String(b.change).replace('%', '')) || -99;
+        return pb - pa;
+      });
+      
+      return sectors;
+    } catch (e) {
+      console.error(`[板块] 请求失败 (尝试 ${attempt}/${maxRetries}):`, e.message);
+      lastError = e;
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
   }
+  
+  console.error('[板块] 所有重试均失败:', lastError?.message);
+  return [];
 }
 
 /**

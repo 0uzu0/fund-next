@@ -166,10 +166,20 @@ export async function apiRequest<T = any>(
 
         const data = await response.json();
 
-        // 保存到缓存（仅 GET 请求）
+        // 保存到缓存（仅 GET 请求，且数据有效时）
+        // 不缓存空数据或失败响应，避免缓存错误状态
         if (cache && (fetchOptions.method === undefined || fetchOptions.method === 'GET')) {
-          const ttl = cache.ttl || DEFAULT_CACHE_TTL;
-          saveToCache(cacheKey, data, ttl);
+          const isValidData = data && (
+            (Array.isArray(data.data) && data.data.length > 0) ||
+            (Array.isArray(data.list) && data.list.length > 0) ||
+            (data.success === true && data.data && Object.keys(data.data).length > 0) ||
+            (data.username) || // 认证响应
+            (data.status === 'ok') // 健康检查
+          );
+          if (isValidData) {
+            const ttl = cache.ttl || DEFAULT_CACHE_TTL;
+            saveToCache(cacheKey, data, ttl);
+          }
         }
 
         return data;
