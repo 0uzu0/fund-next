@@ -764,12 +764,46 @@ export default function Portfolio() {
       return;
     }
 
-    // 持仓金额为0时，清空持仓并从持有基金移除
+    // 持仓金额为0时，检查是否有累计收益需要保留
     if (holdingAmount === 0) {
+      // 如果有累计收益，保留份额为0但保留收益
+      if (cumulativeProfit !== 0) {
+        setEditHoldingError('');
+        setEditHoldingLoading(true);
+        try {
+          const res = await fetch(`${API}/api/fund/shares`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ 
+              code: editHoldingRow.code, 
+              holding_units: 0, 
+              cost_per_unit: 0, 
+              holding_profit: cumulativeProfit 
+            }),
+          });
+          const d = await res.json();
+          if (d.success) {
+            setEditHoldingRow(null);
+            clearCache('portfolio/table');
+            clearCache('/api/fund/data');
+            fetchData();
+            fetchWatchlist();
+            toast.success('已保存（持仓为0，保留历史收益）');
+          } else {
+            setEditHoldingError(d.message || '保存失败');
+          }
+        } catch (e) {
+          setEditHoldingError('网络错误');
+        } finally {
+          setEditHoldingLoading(false);
+        }
+        return;
+      }
+      // 持仓金额为0且累计收益也为0，清空所有数据
       setEditHoldingError('');
       setEditHoldingLoading(true);
       try {
-        // 设置份额为0，is_hold为0，该基金将从持有基金列表中移除
         const res = await fetch(`${API}/api/fund/shares`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
