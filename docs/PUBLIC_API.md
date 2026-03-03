@@ -16,16 +16,14 @@
 X-API-Key: your-api-key-here
 ```
 
-API Key 可通过管理后台创建和管理。
-
 ## 错误处理
 
-当请求失败时，API 会返回以下格式的错误响应：
+错误响应格式：
 
 ```json
 {
   "error": "error_code",
-  "message": "错误描述信息"
+  "message": "错误描述"
 }
 ```
 
@@ -34,7 +32,7 @@ API Key 可通过管理后台创建和管理。
 | 错误码 | HTTP 状态码 | 说明 |
 |--------|-------------|------|
 | `unauthorized` | 401 | API Key 无效或缺失 |
-| `forbidden` | 403 | 权限不足（如未绑定用户） |
+| `forbidden` | 403 | 权限不足（未绑定用户） |
 | `bad_request` | 400 | 请求参数错误 |
 | `not_found` | 404 | 资源不存在 |
 | `internal_error` | 500 | 服务器内部错误 |
@@ -43,20 +41,52 @@ API Key 可通过管理后台创建和管理。
 
 ## API 端点
 
-### 1. 搜索基金
+### 1. 持仓总览
 
-根据关键词搜索基金代码和名称。
+获取用户持仓的总体概况。
 
 ```
-GET /fund/search
+GET /portfolio/summary
 ```
 
-**请求参数**：
+**权限**：API Key 必须绑定用户
 
-| 参数 | 类型 | 必填 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| keyword | String | 是 | - | 搜索关键词（基金代码或名称），至少2个字符 |
-| limit | Number | 否 | 10 | 返回结果数量限制 |
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": {
+    "total_value": 150000.00,
+    "today_est_change": 1234.56,
+    "today_actual_change": 1234.56,
+    "holding_profit": 15000.00,
+    "cumulative_profit": 18000.00
+  }
+}
+```
+
+**字段说明**：
+
+| 字段 | 说明 | 计算公式 |
+|------|------|----------|
+| `total_value` | 总持仓金额 | Σ(持有份额 × 净值) |
+| `today_est_change` | 今日预估涨跌 | Σ(持仓金额 × 日涨跌幅%) |
+| `today_actual_change` | 今日实际涨跌 | 同预估涨跌（已结算部分） |
+| `holding_profit` | 持仓收益 | Σ(持有份额 × (净值 - 成本)) |
+| `cumulative_profit` | 累计收益 | 持仓收益 + 清仓基金历史收益 |
+
+---
+
+### 2. 持仓基金列表
+
+获取用户持有的基金列表及详细数据。
+
+```
+GET /portfolio/holdings
+```
+
+**权限**：API Key 必须绑定用户
 
 **响应示例**：
 
@@ -67,137 +97,39 @@ GET /fund/search
     {
       "code": "000001",
       "name": "华夏成长混合",
-      "type": "混合型"
+      "holding_amount": 50000.00,
+      "est_amount": 615.00,
+      "est_change_pct": 1.23,
+      "actual_amount": 615.00,
+      "actual_change_pct": 1.23,
+      "cumulative": 5000.00
     }
-  ],
-  "total": 1
-}
-```
-
----
-
-### 2. 获取贵金属价格
-
-获取黄金、白银等贵金属的实时价格。
-
-```
-GET /market/precious-metals
-```
-
-**请求参数**：无
-
-**响应示例**：
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "name": "黄金",
-      "symbol": "AU",
-      "price": 450.23,
-      "unit": "元/克",
-      "change": 2.15,
-      "change_percent": 0.48
-    }
-  ],
-  "total": 1,
-  "update_time": "2024-01-15T09:30:00.000Z"
-}
-```
-
----
-
-### 3. 获取用户持仓数据
-
-获取 API Key 绑定的用户的基金持仓数据（需要该 Key 绑定用户）。
-
-```
-GET /user/portfolio
-```
-
-**请求参数**：无
-
-**权限要求**：API Key 必须绑定用户
-
-**响应示例**：
-
-```json
-{
-  "success": true,
-  "data": {
-    "user_id": 1,
-    "username": "admin",
-    "holdings": [
-      {
-        "code": "000001",
-        "name": "华夏成长混合",
-        "shares": 1000,
-        "holding_units": 1000,
-        "cost_per_unit": 1.5,
-        "stored_holding_profit": 0,
-        "is_hold": true,
-        "chart_default": false,
-        "quote": {
-          "nav": 1.8,
-          "acc_nav": 2.5,
-          "daily_return": 1.23,
-          "date": "2024-01-15",
-          "update_time": "2024-01-15 15:00:00"
-        },
-        "calculated": {
-          "current_value": 1800,
-          "cost_value": 1500,
-          "profit": 300,
-          "today_profit": 22.15,
-          "profit_rate": 20.0
-        }
-      }
-    ],
-    "summary": {
-      "total_funds": 1,
-      "valid_quotes": 1,
-      "total_value": 1800,
-      "total_cost": 1500,
-      "holding_profit": 300,
-      "cumulative_profit": 300,
-      "today_profit": 22.15,
-      "profit_rate": 20.0
-    }
-  }
+  ]
 }
 ```
 
 **字段说明**：
 
-| 字段 | 说明 |
-|------|------|
-| `holdings` | 持仓基金列表 |
-| `holdings[].quote` | 实时行情数据（获取失败时为 null） |
-| `holdings[].calculated` | 计算后的数据（获取行情失败时为 null） |
-| `summary.total_value` | 总持仓市值 |
-| `summary.total_cost` | 总成本 |
-| `summary.holding_profit` | 持仓收益（持有份额 × (净值 - 成本)） |
-| `summary.cumulative_profit` | 累计收益（持仓收益 + 清仓基金历史收益） |
-| `summary.today_profit` | 今日实际收益（持有份额 × 昨日净值 × 今日涨跌幅） |
-
-**计算公式**：
-
-- **持仓收益** = 持有份额 × (净值 - 成本单价)
-- **今日实际收益** = 持有份额 × 昨日净值 × 今日涨跌幅(%)
-- **累计收益** = 持仓收益 + 清仓基金历史收益
+| 字段 | 说明 | 计算公式 |
+|------|------|----------|
+| `holding_amount` | 持仓金额 | 持有份额 × 净值 |
+| `est_amount` | 预估收益 | 持仓金额 × 日涨跌幅% |
+| `est_change_pct` | 预估涨跌(%) | 日涨跌幅 |
+| `actual_amount` | 实际收益 | 同预估收益（已结算部分） |
+| `actual_change_pct` | 实际涨跌(%) | 日涨跌幅 |
+| `cumulative` | 持仓收益 | 持有份额 × (净值 - 成本) |
 
 ---
 
-### 4. 获取基金详细信息
+### 3. 基金详情
 
-获取基金的完整信息，包括名称、实时行情、历史净值、重仓股、各周期涨幅等。
+获取基金的完整信息，包括行情、历史净值、重仓股等。
 
 ```
-GET /fund/detail
+GET /fund/detail?code={基金代码}
 ```
 
-**请求参数**：
+**参数**：
 
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
@@ -214,28 +146,20 @@ GET /fund/detail
     "fund_name": "华夏成长混合",
     "fund_type": "混合型",
     "current_quote": {
-      "nav": 1.8,
-      "acc_nav": 2.5,
+      "nav": 1.8000,
+      "acc_nav": 2.5000,
       "daily_return": 1.23,
       "date": "2024-01-15",
       "update_time": "2024-01-15 15:00:00"
     },
     "history": {
-      "records": [
-        {
-          "date": "2024-01-14",
-          "nav": 1.778,
-          "acc_nav": 2.478,
-          "daily_return": -0.56
-        }
-      ],
+      "records": [...],
       "stats": {
         "total_records": 250,
         "first_date": "2023-01-15",
         "last_date": "2024-01-15",
-        "max_nav": 1.85,
-        "min_nav": 1.45,
-        "avg_daily_return": 0.02
+        "max_nav": 1.8500,
+        "min_nav": 1.4500
       },
       "period_returns": {
         "1_week": "1.23",
@@ -258,48 +182,103 @@ GET /fund/detail
 }
 ```
 
-**字段说明**：
+---
 
-| 字段 | 说明 |
-|------|------|
-| `current_quote` | 实时行情数据 |
-| `current_quote.nav` | 单位净值（昨日净值） |
-| `current_quote.acc_nav` | 累计净值 |
-| `current_quote.daily_return` | 日涨跌幅(%) |
-| `history.records` | 历史净值记录列表 |
-| `history.stats` | 历史数据统计 |
-| `history.period_returns` | 各周期收益率 |
-| `holdings` | 重仓股列表 |
+### 4. 搜索基金
+
+根据关键词搜索基金。
+
+```
+GET /fund/search?keyword={关键词}&limit=10
+```
+
+**参数**：
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| keyword | String | 是 | - | 搜索关键词，至少2个字符 |
+| limit | Number | 否 | 10 | 返回数量限制 |
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "code": "000001",
+      "name": "华夏成长混合",
+      "type": "混合型"
+    }
+  ],
+  "total": 1
+}
+```
 
 ---
 
-## 数据更新频率
+### 5. 贵金属价格
 
-| 数据类型 | 更新频率 | 说明 |
-|----------|----------|------|
-| 基金搜索 | 实时 | 从数据库查询 |
-| 贵金属价格 | 实时 | 从外部API获取 |
-| 基金行情 | 交易日 9:30-15:00 | 实时更新 |
-| 历史净值 | 每日 15:00 后 | 每日更新一次 |
-| 重仓股 | 每季度 | 随季报更新 |
+获取黄金、白银等贵金属实时价格。
+
+```
+GET /market/precious-metals
+```
+
+**响应示例**：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "name": "黄金",
+      "symbol": "AU",
+      "price": 450.23,
+      "unit": "元/克",
+      "change": 2.15,
+      "change_percent": 0.48
+    }
+  ],
+  "update_time": "2024-01-15T09:30:00.000Z"
+}
+```
 
 ---
 
-## 注意事项
+## 数据说明
 
-1. **API 限流**：每个 API Key 默认限制为每分钟 60 次请求
-2. **数据延迟**：基金估值数据可能有 5-15 分钟延迟
-3. **交易时间**：
-   - 交易日：周一至周五（节假日除外）
-   - 交易时间：9:30-11:30, 13:00-15:00
-   - 非交易时间可能返回缓存数据
-4. **净值日期**：实际收益数据仅在净值日期为当天或昨天（9:30前）时显示
+### 计算逻辑
+
+| 指标 | 计算公式 |
+|------|----------|
+| 持仓金额 | 持有份额 × 单位净值 |
+| 预估收益 | 持仓金额 × 日涨跌幅% |
+| 实际收益 | 同预估收益（已结算部分） |
+| 持仓收益 | 持有份额 × (净值 - 成本单价) |
+| 累计收益 | 持仓收益 + 清仓基金历史收益 |
+
+### 显示规则
+
+**实际收益/涨跌**：
+- 净值日期为今天：显示
+- 净值日期为昨天且当前时间 < 9:30：显示
+- 净值日期为昨天且当前时间 >= 9:30：不显示（等待今天净值）
+
+### 更新频率
+
+| 数据类型 | 更新频率 |
+|----------|----------|
+| 持仓总览/列表 | 实时计算 |
+| 基金行情 | 交易日 9:30-15:00 实时更新 |
+| 历史净值 | 每日 15:00 后更新 |
+| 贵金属价格 | 实时 |
 
 ---
 
 ## 变更日志
 
 ### 2024-01-15
-- 初始版本发布
-- 提供基金搜索、贵金属价格、用户持仓、基金详情四个接口
-- 持仓收益计算改为动态计算：持有份额 × (净值 - 成本)
+- 重构持仓接口，拆分为总览和列表两个独立接口
+- 精简响应字段，只保留核心数据
+- 统一计算逻辑：持仓收益 = 持有份额 × (净值 - 成本)

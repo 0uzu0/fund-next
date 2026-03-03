@@ -84,11 +84,122 @@ router.get('/market/precious-metals', apiKeyAuth, async (req, res) => {
 });
 
 /**
- * @api {get} /api/v1/public/user/portfolio 获取用户持仓数据
- * @apiDescription 获取API Key绑定的用户的基金持仓数据（需要该Key绑定用户）
+ * @api {get} /api/v1/public/portfolio/summary 获取持仓总览
+ * @apiDescription 获取用户持仓的总体概况数据
  * @apiPermission read
  */
-router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
+router.get('/portfolio/summary', apiKeyAuth, async (req, res) => {
+  try {
+    const db = require('../db');
+
+    // 检查API Key是否绑定了用户
+    if (!req.apiKey.bindUserId) {
+      return res.status(403).json({
+        error: 'no_user_bound',
+        message: '该API Key未绑定用户，无法访问持仓数据'
+      });
+    }
+
+    const userId = req.apiKey.bindUserId;
+
+    // 获取用户的持仓基金
+    const holdings = db.prepare(`
+      SELECT
+        uf.fund_code,
+        uf.holding_units,
+        uf.cost_per_unit
+      FROM user_funds uf
+      WHERE uf.user_id = ? AND uf.is_hold = 1
+    `).all(userId);
+
+    if (holdings.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          total_value: 0,
+          today_est_change: 0,
+          today_actual_change: 0,
+          holding_profit: 0,
+          cumulative_profit: 0
+        }
+      });
+    }
+
+    // 获取实时行情并计算汇总数据
+    let totalValue = 0;
+    let totalCost = 0;
+    let todayEstChange = 0;
+    let todayActualChange = 0;
+    let holdingProfit = 0;
+
+    await Promise.all(
+      holdings.map(async (h) => {
+        try {
+          const quote = await fundQuotes.getFundQuote(h.fund_code);
+          if (quote && quote.nav) {
+            const holdingUnits = h.holding_units || 0;
+            const costPerUnit = h.cost_per_unit || 0;
+            const nav = quote.nav || 0;
+            const dailyReturn = quote.dailyReturn || 0;
+            
+            const currentValue = holdingUnits * nav;
+            const costValue = holdingUnits * costPerUnit;
+            
+            totalValue += currentValue;
+            totalCost += costValue;
+            
+            // 今日预估涨跌（基于估值）
+            todayEstChange += currentValue * (dailyReturn / 100);
+            
+            // 今日实际涨跌（已结算部分）
+            todayActualChange += currentValue * (dailyReturn / 100);
+            
+            // 持仓收益
+            holdingProfit += (nav - costPerUnit) * holdingUnits;
+          }
+        } catch (e) {
+          console.error(`获取基金 ${h.fund_code} 行情失败:`, e.message);
+        }
+      })
+    );
+
+    // 计算清仓基金的历史收益
+    let clearedProfit = 0;
+    try {
+      const clearedRows = db.prepare('SELECT holding_profit FROM user_funds WHERE user_id = ? AND (holding_units IS NULL OR holding_units = 0) AND holding_profit IS NOT NULL AND holding_profit != 0').all(userId);
+      for (const r of clearedRows) {
+        clearedProfit += Number(r.holding_profit) || 0;
+      }
+    } catch (e) {}
+
+    // 累计收益 = 持仓收益 + 清仓基金历史收益
+    const cumulativeProfit = holdingProfit + clearedProfit;
+
+    res.json({
+      success: true,
+      data: {
+        total_value: Math.round(totalValue * 100) / 100,
+        today_est_change: Math.round(todayEstChange * 100) / 100,
+        today_actual_change: Math.round(todayActualChange * 100) / 100,
+        holding_profit: Math.round(holdingProfit * 100) / 100,
+        cumulative_profit: Math.round(cumulativeProfit * 100) / 100
+      }
+    });
+  } catch (error) {
+    console.error('获取持仓总览失败:', error);
+    res.status(500).json({
+      error: 'internal_error',
+      message: '获取持仓数据失败'
+    });
+  }
+});
+
+/**
+ * @api {get} /api/v1/public/portfolio/holdings 获取持仓基金列表
+ * @apiDescription 获取用户持有的基金列表及详细数据
+ * @apiPermission read
+ */
+router.get('/portfolio/holdings', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
 
@@ -107,12 +218,8 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
       SELECT
         uf.fund_code,
         uf.fund_name,
-        uf.shares,
         uf.holding_units,
-        uf.cost_per_unit,
-        uf.holding_profit,
-        uf.is_hold,
-        uf.chart_default
+        uf.cost_per_unit
       FROM user_funds uf
       WHERE uf.user_id = ? AND uf.is_hold = 1
       ORDER BY uf.fund_code ASC
@@ -121,124 +228,68 @@ router.get('/user/portfolio', apiKeyAuth, async (req, res) => {
     if (holdings.length === 0) {
       return res.json({
         success: true,
-        data: {
-          user_id: userId,
-          username: req.apiKey.bindUsername,
-          holdings: [],
-          summary: {
-            total_funds: 0,
-            total_value: 0,
-            total_cost: 0,
-            total_profit: 0,
-            profit_rate: 0
-          }
-        }
+        data: []
       });
     }
 
-    // 获取实时行情
-    const holdingsWithQuotes = await Promise.all(
+    // 获取实时行情并计算每只基金的数据
+    const holdingsData = await Promise.all(
       holdings.map(async (h) => {
         try {
           const quote = await fundQuotes.getFundQuote(h.fund_code);
-          if (quote) {
+          if (quote && quote.nav) {
             const holdingUnits = h.holding_units || 0;
             const costPerUnit = h.cost_per_unit || 0;
-            const currentValue = holdingUnits * (quote.nav || 0);
+            const nav = quote.nav || 0;
+            const dailyReturn = quote.dailyReturn || 0;
+            
+            const currentValue = holdingUnits * nav;
             const costValue = holdingUnits * costPerUnit;
-            // 今日实际收益 = 持有份额 × 昨日净值 × 今日涨跌幅
-            const todayActualProfit = holdingUnits * (quote.nav || 0) * ((quote.dailyReturn || 0) / 100);
-            // 累计收益 = (昨日净值 - 持仓成本) × 持有份额
-            // 这是动态计算的，与前端持有基金页面显示一致
-            const cumulativeProfit = ((quote.nav || 0) - costPerUnit) * holdingUnits;
+            
+            // 预估收益 = 持仓金额 × 预估涨跌幅
+            const estAmount = currentValue * (dailyReturn / 100);
+            
+            // 实际收益 = 持仓金额 × 实际涨跌幅（与预估相同，都是基于日涨跌）
+            const actualAmount = currentValue * (dailyReturn / 100);
+            
+            // 持仓收益 = (净值 - 成本) × 份额
+            const cumulative = (nav - costPerUnit) * holdingUnits;
 
             return {
               code: h.fund_code,
               name: h.fund_name,
-              shares: h.shares,
-              holding_units: holdingUnits,
-              cost_per_unit: costPerUnit,
-              stored_holding_profit: h.holding_profit,
-              is_hold: !!h.is_hold,
-              chart_default: !!h.chart_default,
-              quote: {
-                nav: quote.nav,
-                acc_nav: quote.accNav,
-                daily_return: quote.dailyReturn,
-                date: quote.date,
-                update_time: quote.updateTime
-              },
-              calculated: {
-                current_value: Math.round(currentValue * 100) / 100,
-                cost_value: Math.round(costValue * 100) / 100,
-                // 累计收益 = (净值 - 成本) × 份额
-                profit: Math.round(cumulativeProfit * 100) / 100,
-                // 今日实际收益
-                today_profit: Math.round(todayActualProfit * 100) / 100,
-                profit_rate: costValue > 0 ? Math.round((cumulativeProfit / costValue) * 10000) / 100 : 0
-              }
+              holding_amount: Math.round(currentValue * 100) / 100,
+              est_amount: Math.round(estAmount * 100) / 100,
+              est_change_pct: dailyReturn,
+              actual_amount: Math.round(actualAmount * 100) / 100,
+              actual_change_pct: dailyReturn,
+              cumulative: Math.round(cumulative * 100) / 100
             };
           }
         } catch (e) {
           console.error(`获取基金 ${h.fund_code} 行情失败:`, e.message);
         }
 
+        // 获取行情失败时返回基础信息
         return {
           code: h.fund_code,
           name: h.fund_name,
-          shares: h.shares,
-          holding_units: h.holding_units,
-          cost_per_unit: h.cost_per_unit,
-          stored_holding_profit: h.holding_profit,
-          is_hold: !!h.is_hold,
-          chart_default: !!h.chart_default,
-          quote: null,
-          calculated: null
+          holding_amount: 0,
+          est_amount: 0,
+          est_change_pct: 0,
+          actual_amount: 0,
+          actual_change_pct: 0,
+          cumulative: 0
         };
       })
     );
 
-    // 计算汇总数据
-    // 持仓收益 = 所有持有基金的 profit 之和
-    // 累计收益 = 持仓收益 + 清仓基金历史收益
-    const validHoldings = holdingsWithQuotes.filter(h => h.calculated !== null);
-    const totalValue = validHoldings.reduce((sum, h) => sum + (h.calculated?.current_value || 0), 0);
-    const totalCost = validHoldings.reduce((sum, h) => sum + (h.calculated?.cost_value || 0), 0);
-    const totalProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.profit || 0), 0);
-    const totalTodayProfit = validHoldings.reduce((sum, h) => sum + (h.calculated?.today_profit || 0), 0);
-    
-    // 计算清仓基金的历史收益
-    let clearedProfit = 0;
-    try {
-      const clearedRows = db.prepare('SELECT holding_profit FROM user_funds WHERE user_id = ? AND (holding_units IS NULL OR holding_units = 0) AND holding_profit IS NOT NULL AND holding_profit != 0').all(userId);
-      for (const r of clearedRows) {
-        clearedProfit += Number(r.holding_profit) || 0;
-      }
-    } catch (e) {}
-    
-    // 累计收益 = 持仓收益 + 清仓基金历史收益
-    const totalCumulative = totalProfit + clearedProfit;
-
     res.json({
       success: true,
-      data: {
-        user_id: userId,
-        username: req.apiKey.bindUsername,
-        holdings: holdingsWithQuotes,
-        summary: {
-          total_funds: holdings.length,
-          valid_quotes: validHoldings.length,
-          total_value: Math.round(totalValue * 100) / 100,
-          total_cost: Math.round(totalCost * 100) / 100,
-          holding_profit: Math.round(totalProfit * 100) / 100,
-          cumulative_profit: Math.round(totalCumulative * 100) / 100,
-          today_profit: Math.round(totalTodayProfit * 100) / 100,
-          profit_rate: totalCost > 0 ? Math.round((totalProfit / totalCost) * 10000) / 100 : 0
-        }
-      }
+      data: holdingsData
     });
   } catch (error) {
-    console.error('获取用户持仓失败:', error);
+    console.error('获取持仓基金列表失败:', error);
     res.status(500).json({
       error: 'internal_error',
       message: '获取持仓数据失败'
