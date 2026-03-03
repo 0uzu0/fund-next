@@ -109,23 +109,63 @@ export function getYesterdayStr(): string {
 }
 
 /**
+ * 判断当前是否在交易日的9:30之后
+ * 周末不算交易日
+ */
+function isAfterMarketOpen(): boolean {
+  const now = new Date();
+  const day = now.getDay();
+  // 周末不是交易日
+  if (day === 0 || day === 6) return false;
+  
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const timeNum = hours * 100 + minutes;
+  // 9:30 之后
+  return timeNum >= 930;
+}
+
+/**
  * 是否应显示实际收益/涨跌数据
- * 规则：净值日期为今天或昨天时显示，持续到次日9:30前
+ * 
+ * 显示规则：
+ * - 净值日期是今天：显示（今天净值已发布）
+ * - 净值日期是昨天：
+ *   - 交易日9:30之前：显示（昨天净值，今天还没开盘）
+ *   - 交易日9:30之后：不显示（等今天净值发布，期间显示"—"）
+ * - 非交易日：显示昨天的净值
+ * 
  * @param netValueDate 净值日期字符串（格式：YYYY-MM-DD 或 MM-DD）
  */
 export function shouldShowActualData(netValueDate: string | undefined): boolean {
   if (!netValueDate || String(netValueDate).trim() === '' || netValueDate === '—') return false;
+  
   const today = getTodayStr();
   const yesterday = getYesterdayStr();
   const dateStr = String(netValueDate).trim();
-  // 支持 YYYY-MM-DD 或 MM-DD 格式
-  if (dateStr === today || dateStr === yesterday) return true;
-  // 如果是 MM-DD 格式，补全年份后比较
+  
+  // 解析日期，支持 YYYY-MM-DD 或 MM-DD 格式
+  let normalizedDate = dateStr;
   if (/^\d{2}-\d{2}$/.test(dateStr)) {
     const currentYear = new Date().getFullYear();
-    const fullDate = `${currentYear}-${dateStr}`;
-    if (fullDate === today || fullDate === yesterday) return true;
+    normalizedDate = `${currentYear}-${dateStr}`;
   }
+  
+  // 净值日期是今天：说明今天净值已发布，显示
+  if (normalizedDate === today) return true;
+  
+  // 净值日期是昨天：
+  // - 交易日9:30前：显示昨天的净值
+  // - 交易日9:30后：不显示（等今天净值）
+  if (normalizedDate === yesterday) {
+    // 如果是交易日且已过9:30，不显示昨天的数据
+    if (isAfterMarketOpen()) {
+      return false;
+    }
+    return true;
+  }
+  
+  // 净值日期既不是今天也不是昨天：不显示
   return false;
 }
 

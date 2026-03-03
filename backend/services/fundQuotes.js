@@ -206,7 +206,10 @@ function buildPositionRows(resultRows, fundMap) {
 
     const positionValue = holdingUnits * netValue;
     const estAmount = (positionValue * estimatedGrowth) / 100;
-    // 实际收益和涨跌显示持续到次日9:30前：只要净值日期是今天或昨天就显示
+    // 实际收益和涨跌显示规则：
+    // - 净值日期是今天：显示（今天净值已发布）
+    // - 净值日期是昨天：显示（直到今天9:30，之后如果今天净值未发布仍显示昨天的）
+    // 注意：交易时间内9:30-15:00，如果今天净值还没发布，前端会用 shouldShowActualData 判断是否显示
     const isActualValid = netValueDate === today || netValueDate === getYesterdayStr();
     const actualAmount = isActualValid ? (positionValue * dayGrowth) / 100 : 0;
     const actualPct = isActualValid ? dayGrowth : 0;
