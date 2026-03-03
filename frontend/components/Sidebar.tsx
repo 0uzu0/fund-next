@@ -5,7 +5,6 @@ import { apiGet } from '../utils/apiClient';
 
 const ITEMS = [
   { href: '/portfolio', icon: '💼', label: '持仓基金' },
-  { href: '/position-records', icon: '📋', label: '持仓记录' },
   { href: '/market', icon: '📈', label: '市场行情' },
   { href: '/market-indices', icon: '📊', label: '市场指数' },
   { href: '/precious-metals', icon: '🥇', label: '贵金属行情' },

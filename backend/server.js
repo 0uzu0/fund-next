@@ -175,7 +175,7 @@ app.use(require('./routes/fundApi'));
 app.use(require('./routes/apiAdmin'));
 
 // 3. 认证保护的路由
-app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/position-records', '/admin/*'], (req, res, next) => {
+app.get(['/portfolio', '/market', '/market-indices', '/precious-metals', '/sectors', '/admin/*'], (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   if (!req.session || !req.session.user_id) {
     const redirect = encodeURIComponent(req.path);

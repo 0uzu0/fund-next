@@ -312,7 +312,7 @@ router.get('/api/fund/download', loginRequired, (req, res) => {
   }
 });
 
-// ---------- 持仓份额（加减仓时写入 position_records，与原项目一致）----------
+// ---------- 持仓份额 ----------
 router.post('/api/fund/shares', loginRequired, (req, res) => {
   try {
     const { code, holding_units, cost_per_unit, holding_profit, shares, record_op, amount, units, trade_date, period, fund_name, fee_rate, fixed_fee, fee_type } = req.body || {};
@@ -351,25 +351,6 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
       ).run(holdingUnits, costPerUnit, holdingUnits * costPerUnit, isHold, userId, c);
     }
 
-    if (record_op === 'add' || record_op === 'reduce') {
-      const amt = amount != null ? Number(amount) : NaN;
-      const unitsValue = units != null ? Number(units) : null;
-      const tDate = (trade_date && String(trade_date).trim()) || '';
-      const feeRateValue = fee_rate != null ? Number(fee_rate) : 0;
-      const fixedFeeValue = fixed_fee != null ? Number(fixed_fee) : 0;
-      const feeTypeValue = fee_type || 'rate';
-      if (Number.isFinite(amt) && tDate) {
-        try {
-          db.prepare(
-            `INSERT INTO position_records (user_id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit, fee_rate, fixed_fee, fee_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          ).run(userId, c, prevFundName, record_op, amt, unitsValue, tDate, (period && String(period).trim()) || '', prevHoldingUnits, prevCostPerUnit, holdingUnits, costPerUnit, feeRateValue, fixedFeeValue, feeTypeValue);
-        } catch (err) {
-          console.warn('Insert position record failed:', err);
-        }
-      }
-    }
-
     res.json({
       success: true,
       message: '已更新持仓金额',
@@ -377,97 +358,6 @@ router.post('/api/fund/shares', loginRequired, (req, res) => {
       holding_units: holdingUnits,
       cost_per_unit: costPerUnit,
     });
-  } catch (e) {
-    res.status(500).json({ success: false, message: String(e) });
-  }
-});
-
-/**
- * 判断持仓记录是否仍可撤销
- * 规则：当日 15:00 前操作须在当日 15:00 前撤销，当日 15:00 后须在次日 15:00 前撤销
- * @param {{ trade_date?: string, period?: string }} record
- * @returns {boolean}
- */
-function checkPositionRecordUndoDeadline(record) {
-  const tradeDate = (record.trade_date || '').trim();
-  if (!tradeDate) return true;
-  const period = (record.period || '').trim().toLowerCase();
-  let deadline;
-  try {
-    const d = new Date(tradeDate + 'T12:00:00');
-    if (period === 'after15') {
-      d.setDate(d.getDate() + 1);
-      d.setHours(15, 0, 0, 0);
-    } else {
-      d.setHours(15, 0, 0, 0);
-    }
-    deadline = d.getTime();
-  } catch (e) {
-    return false;
-  }
-  return Date.now() < deadline;
-}
-
-// ---------- 持仓记录列表（加减仓记录）----------
-router.get('/api/fund/position-records', loginRequired, (req, res) => {
-  try {
-    const userId = getCurrentUserId(req);
-    const rows = db.prepare(
-      `SELECT id, fund_code, fund_name, op, amount, units, trade_date, period, prev_holding_units, prev_cost_per_unit, new_holding_units, new_cost_per_unit, created_at
-       FROM position_records WHERE user_id = ? ORDER BY created_at DESC`
-    ).all(userId);
-    const records = rows.map((r) => ({
-      id: r.id,
-      fund_code: r.fund_code,
-      fund_name: r.fund_name,
-      op: r.op,
-      amount: r.amount,
-      units: r.units != null ? r.units : null,
-      trade_date: r.trade_date,
-      period: r.period,
-      prev_holding_units: r.prev_holding_units,
-      prev_cost_per_unit: r.prev_cost_per_unit,
-      new_holding_units: r.new_holding_units,
-      new_cost_per_unit: r.new_cost_per_unit,
-      created_at: r.created_at,
-      can_undo: checkPositionRecordUndoDeadline(r),
-    }));
-    res.json({ success: true, records });
-  } catch (e) {
-    res.status(500).json({ success: false, message: String(e) });
-  }
-});
-
-// ---------- 撤销持仓记录（恢复当时持仓并删除记录，与原项目一致）----------
-router.delete('/api/fund/position-records/:id', loginRequired, (req, res) => {
-  try {
-    const userId = getCurrentUserId(req);
-    const recordId = parseInt(req.params.id, 10);
-    if (!Number.isInteger(recordId) || recordId < 1) {
-      return res.status(400).json({ success: false, message: '无效的记录 ID' });
-    }
-    const rec = db.prepare('SELECT * FROM position_records WHERE id = ? AND user_id = ?').get(recordId, userId);
-    if (!rec) {
-      return res.status(404).json({ success: false, message: '记录不存在或无权操作' });
-    }
-    if (!checkPositionRecordUndoDeadline(rec)) {
-      return res.status(400).json({
-        success: false,
-        message: '已过撤销截止时间（当日15:00前操作须在当日15:00前撤销，当日15:00后操作须在次日15:00前撤销），无法撤销',
-      });
-    }
-    const prevUnits = Number(rec.prev_holding_units) || 0;
-    const prevCost = Number(rec.prev_cost_per_unit) || 1;
-    const shares = prevUnits * prevCost;
-    const fundCode = rec.fund_code;
-    const up = db.prepare(
-      'UPDATE user_funds SET holding_units = ?, cost_per_unit = ?, shares = ? WHERE user_id = ? AND fund_code = ?'
-    ).run(prevUnits, prevCost, shares, userId, fundCode);
-    if (up.changes === 0) {
-      return res.status(400).json({ success: false, message: '基金不存在，无法恢复' });
-    }
-    db.prepare('DELETE FROM position_records WHERE id = ?').run(recordId);
-    res.json({ success: true, message: '已撤销并恢复持仓' });
   } catch (e) {
     res.status(500).json({ success: false, message: String(e) });
   }

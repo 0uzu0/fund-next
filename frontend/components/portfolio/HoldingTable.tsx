@@ -17,8 +17,6 @@ type HoldingTableProps = {
   onPageChange: (page: number) => void;
   hideSensitiveValues: boolean;
   onRowDetail: (row: HoldingRow) => void;
-  onAddPosition: (row: HoldingRow) => void;
-  onReducePosition: (row: HoldingRow) => void;
 };
 
 const COLS = [
@@ -43,8 +41,6 @@ export default function HoldingTable({
   onPageChange,
   hideSensitiveValues,
   onRowDetail,
-  onAddPosition,
-  onReducePosition,
 }: HoldingTableProps) {
   return (
     <div>
@@ -68,13 +64,12 @@ export default function HoldingTable({
                   {label}
                 </th>
               ))}
-              <th>操作</th>
             </tr>
           </thead>
           <tbody>
             {isEmpty && (
               <tr>
-                <td colSpan={9} style={{ padding: 24, color: 'var(--text-dim)' }}>暂无持仓数据</td>
+                <td colSpan={8} style={{ padding: 24, color: 'var(--text-dim)' }}>暂无持仓数据</td>
               </tr>
             )}
             {rows.map((r) => (
@@ -103,10 +98,6 @@ export default function HoldingTable({
                 }</td>
                 <td className={toNum(r.actualPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (shouldShowActualData(r.netValueDate) && toNum(r.actualPct) !== 0 ? formatPct(r.actualPct) : '—')}</td>
                 <td className={toNum(r.cumulative) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.cumulative)}</td>
-                <td>
-                  <button type="button" className="btn btn-primary" style={{ padding: '6px 12px', marginRight: 8 }} onClick={() => onAddPosition(r)}>加仓</button>
-                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px' }} onClick={() => onReducePosition(r)}>减仓</button>
-                </td>
               </tr>
             ))}
           </tbody>

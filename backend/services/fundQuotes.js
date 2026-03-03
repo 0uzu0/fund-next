@@ -206,16 +206,39 @@ function buildPositionRows(resultRows, fundMap) {
 
     const positionValue = holdingUnits * netValue;
     const estAmount = (positionValue * estimatedGrowth) / 100;
-    // 实际收益和涨跌显示规则：
+    
+    // 实际收益和涨跌显示规则（与前端 shouldShowActualData 保持一致）：
     // - 净值日期是今天：显示（今天净值已发布）
-    // - 净值日期是昨天：显示（直到今天9:30，之后如果今天净值未发布仍显示昨天的）
-    // 注意：交易时间内9:30-15:00，如果今天净值还没发布，前端会用 shouldShowActualData 判断是否显示
-    const isActualValid = netValueDate === today || netValueDate === getYesterdayStr();
-    const actualAmount = isActualValid ? (positionValue * dayGrowth) / 100 : 0;
-    const actualPct = isActualValid ? dayGrowth : 0;
-    // 持仓收益 = holding_profit（手动填写或清仓时记录的历史收益）
-    // 始终使用数据库中的 holding_profit，即使份额为0也保留历史收益
-    const cumulative = holdingProfit;
+    // - 净值日期是昨天：交易日9:30前显示，9:30后不显示（等今天净值）
+    // - 其他情况：不显示
+    const isAfterMarketOpen = () => {
+      const now = new Date();
+      const hours = now.getHours();
+      const minutes = now.getMinutes();
+      return hours > 9 || (hours === 9 && minutes >= 30);
+    };
+    
+    const isTradingDay = () => {
+      const day = new Date().getDay();
+      return day !== 0 && day !== 6; // 0=周日, 6=周六
+    };
+    
+    let shouldShowActual = false;
+    if (netValueDate === today) {
+      shouldShowActual = true;
+    } else if (netValueDate === getYesterdayStr()) {
+      // 如果是交易日且已过9:30，不显示昨天的数据
+      if (isTradingDay() && isAfterMarketOpen()) {
+        shouldShowActual = false;
+      } else {
+        shouldShowActual = true;
+      }
+    }
+    
+    const actualAmount = shouldShowActual ? (positionValue * dayGrowth) / 100 : 0;
+    const actualPct = shouldShowActual ? dayGrowth : 0;
+    // 持仓收益 = 持有份额 × (净值 - 成本单价)
+    const cumulative = holdingUnits * (netValue - costPerUnit);
 
     rows.push({
       code: String(code),
