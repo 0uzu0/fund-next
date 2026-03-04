@@ -85,12 +85,13 @@ router.get('/market/precious-metals', apiKeyAuth, async (req, res) => {
 
 /**
  * @api {get} /api/v1/public/portfolio/summary 获取持仓总览
- * @apiDescription 获取用户持仓的总体概况数据
+ * @apiDescription 获取用户持仓的总体概况数据，数据与前端页面实时同步
  * @apiPermission read
  */
 router.get('/portfolio/summary', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
+    const tiantianFund = require('../services/tiantianFund');
 
     // 检查API Key是否绑定了用户
     if (!req.apiKey.bindUserId) {
@@ -102,17 +103,22 @@ router.get('/portfolio/summary', apiKeyAuth, async (req, res) => {
 
     const userId = req.apiKey.bindUserId;
 
-    // 获取用户的持仓基金
-    const holdings = db.prepare(`
+    // 获取用户的持仓基金（与 /api/portfolio/table 保持一致）
+    const fundRows = db.prepare(`
       SELECT
-        uf.fund_code,
-        uf.holding_units,
-        uf.cost_per_unit
-      FROM user_funds uf
-      WHERE uf.user_id = ? AND uf.is_hold = 1
+        fund_code,
+        fund_key,
+        fund_name,
+        sectors,
+        shares,
+        holding_units,
+        cost_per_unit,
+        holding_profit
+      FROM user_funds
+      WHERE user_id = ? AND is_hold = 1
     `).all(userId);
 
-    if (holdings.length === 0) {
+    if (fundRows.length === 0) {
       return res.json({
         success: true,
         data: {
@@ -125,43 +131,77 @@ router.get('/portfolio/summary', apiKeyAuth, async (req, res) => {
       });
     }
 
-    // 获取实时行情并计算汇总数据
+    // 构建 fundMap（与前端保持一致）
+    const fundMapForSearch = {};
+    const fundMapForHolding = {};
+    for (const r of fundRows) {
+      const sectors = r.sectors ? JSON.parse(r.sectors) : [];
+      const holdingUnits = r.holding_units != null ? r.holding_units : r.shares;
+      const costPerUnit = r.cost_per_unit != null ? r.cost_per_unit : 1;
+      const holdingProfit = r.holding_profit != null ? r.holding_profit : 0;
+      fundMapForSearch[r.fund_code] = {
+        fund_key: r.fund_key,
+        fund_name: r.fund_name,
+        sectors,
+      };
+      fundMapForHolding[r.fund_code] = {
+        shares: (holdingUnits || 0) * (costPerUnit || 1),
+        holding_units: holdingUnits || 0,
+        cost_per_unit: costPerUnit || 1,
+        holding_profit: holdingProfit || 0,
+      };
+    }
+
+    // 同时获取 fund123 和天天基金数据（一主一备，与前端保持一致）
+    let rows = [];
+    try {
+      const [resultRows123, resultRowsTiantian] = await Promise.all([
+        fundQuotes.searchCode(fundMapForSearch).catch(() => []),
+        tiantianFund.searchCodeTiantian(fundMapForSearch).catch(() => []),
+      ]);
+      const byCode123 = new Map(resultRows123.map((r) => [r[0], r]));
+      const byCodeTT = new Map(resultRowsTiantian.map((r) => [r[0], r]));
+      const merged = [];
+      for (const code of Object.keys(fundMapForSearch)) {
+        const r123 = byCode123.get(code);
+        const rTT = byCodeTT.get(code);
+        // [code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo]
+        const name = (r123 && r123[1]) || (rTT && rTT[1]) || (fundMapForSearch[code] && fundMapForSearch[code].fund_name) || `基金${code}`;
+        // fund123 为主、天天为备
+        const netValuePrimary = r123 && r123[3] && String(r123[3]).trim() !== '—' ? r123[3] : null;
+        const netValueBackup = rTT && rTT[3] && String(rTT[3]).trim() !== '—' ? rTT[3] : null;
+        let netValue = netValuePrimary || netValueBackup || '—';
+        // 仅天天有数据时用 估值(今日) 作为净值
+        if (!r123 && rTT && rTT[8] && String(rTT[8]).trim()) netValue = rTT[8];
+        const nowTimeVal = (r123 && r123[2] && String(r123[2]).trim() !== '—') ? r123[2] : (rTT && rTT[2] && String(rTT[2]).trim() !== '—' ? rTT[2] : null);
+        const nowTime = nowTimeVal || '—';
+        const forecastVal = (r123 && r123[4] && String(r123[4]).trim() !== 'N/A') ? r123[4] : (rTT && rTT[4] && String(rTT[4]).trim() !== 'N/A' ? rTT[4] : null);
+        const forecastGrowth = forecastVal || 'N/A';
+        const dayGrowthPrimary = r123 && r123[5] && String(r123[5]).trim() !== '—' ? r123[5] : null;
+        const dayGrowthBackup = rTT && rTT[5] && String(rTT[5]).trim() !== '—' ? rTT[5] : null;
+        const dayOfGrowth = dayGrowthPrimary || dayGrowthBackup || '—';
+        const consecutiveInfo = (r123 && r123[6] && String(r123[6]).trim() !== '—' ? r123[6] : null) || '—';
+        const monthlyInfo = (r123 && r123[7] && String(r123[7]).trim() !== '—' ? r123[7] : null) || '—';
+        const estimateDate = (r123 && r123[8] && String(r123[8]).trim()) ? String(r123[8]).trim() : '';
+        merged.push([code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo, estimateDate]);
+      }
+      rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
+    } catch (err) {
+      console.error('获取基金行情失败:', err);
+    }
+
+    // 汇总计算
     let totalValue = 0;
-    let totalCost = 0;
     let todayEstChange = 0;
     let todayActualChange = 0;
     let holdingProfit = 0;
 
-    await Promise.all(
-      holdings.map(async (h) => {
-        try {
-          const quote = await fundQuotes.getFundQuote(h.fund_code);
-          if (quote && quote.nav) {
-            const holdingUnits = h.holding_units || 0;
-            const costPerUnit = h.cost_per_unit || 0;
-            const nav = quote.nav || 0;
-            const dailyReturn = quote.dailyReturn || 0;
-            
-            const currentValue = holdingUnits * nav;
-            const costValue = holdingUnits * costPerUnit;
-            
-            totalValue += currentValue;
-            totalCost += costValue;
-            
-            // 今日预估涨跌（基于估值）
-            todayEstChange += currentValue * (dailyReturn / 100);
-            
-            // 今日实际涨跌（已结算部分）
-            todayActualChange += currentValue * (dailyReturn / 100);
-            
-            // 持仓收益
-            holdingProfit += (nav - costPerUnit) * holdingUnits;
-          }
-        } catch (e) {
-          console.error(`获取基金 ${h.fund_code} 行情失败:`, e.message);
-        }
-      })
-    );
+    for (const row of rows) {
+      totalValue += row.holding || 0;
+      todayEstChange += row.estAmount || 0;
+      todayActualChange += row.actualAmount || 0;
+      holdingProfit += row.cumulative || 0;
+    }
 
     // 计算清仓基金的历史收益
     let clearedProfit = 0;
@@ -196,12 +236,13 @@ router.get('/portfolio/summary', apiKeyAuth, async (req, res) => {
 
 /**
  * @api {get} /api/v1/public/portfolio/holdings 获取持仓基金列表
- * @apiDescription 获取用户持有的基金列表及详细数据
+ * @apiDescription 获取用户持有的基金列表及详细数据，数据与前端页面实时同步
  * @apiPermission read
  */
 router.get('/portfolio/holdings', apiKeyAuth, async (req, res) => {
   try {
     const db = require('../db');
+    const tiantianFund = require('../services/tiantianFund');
 
     // 检查API Key是否绑定了用户
     if (!req.apiKey.bindUserId) {
@@ -213,76 +254,112 @@ router.get('/portfolio/holdings', apiKeyAuth, async (req, res) => {
 
     const userId = req.apiKey.bindUserId;
 
-    // 获取用户的持仓基金
-    const holdings = db.prepare(`
+    // 获取用户的持仓基金（与 /api/portfolio/table 保持一致）
+    const fundRows = db.prepare(`
       SELECT
-        uf.fund_code,
-        uf.fund_name,
-        uf.holding_units,
-        uf.cost_per_unit
-      FROM user_funds uf
-      WHERE uf.user_id = ? AND uf.is_hold = 1
-      ORDER BY uf.fund_code ASC
+        fund_code,
+        fund_key,
+        fund_name,
+        sectors,
+        shares,
+        holding_units,
+        cost_per_unit,
+        holding_profit
+      FROM user_funds
+      WHERE user_id = ? AND is_hold = 1
     `).all(userId);
 
-    if (holdings.length === 0) {
+    if (fundRows.length === 0) {
       return res.json({
         success: true,
         data: []
       });
     }
 
-    // 获取实时行情并计算每只基金的数据
-    const holdingsData = await Promise.all(
-      holdings.map(async (h) => {
-        try {
-          const quote = await fundQuotes.getFundQuote(h.fund_code);
-          if (quote && quote.nav) {
-            const holdingUnits = h.holding_units || 0;
-            const costPerUnit = h.cost_per_unit || 0;
-            const nav = quote.nav || 0;
-            const dailyReturn = quote.dailyReturn || 0;
-            
-            const currentValue = holdingUnits * nav;
-            const costValue = holdingUnits * costPerUnit;
-            
-            // 预估收益 = 持仓金额 × 预估涨跌幅
-            const estAmount = currentValue * (dailyReturn / 100);
-            
-            // 实际收益 = 持仓金额 × 实际涨跌幅（与预估相同，都是基于日涨跌）
-            const actualAmount = currentValue * (dailyReturn / 100);
-            
-            // 持仓收益 = (净值 - 成本) × 份额
-            const cumulative = (nav - costPerUnit) * holdingUnits;
+    // 构建 fundMap（与前端保持一致）
+    const fundMapForSearch = {};
+    const fundMapForHolding = {};
+    for (const r of fundRows) {
+      const sectors = r.sectors ? JSON.parse(r.sectors) : [];
+      const holdingUnits = r.holding_units != null ? r.holding_units : r.shares;
+      const costPerUnit = r.cost_per_unit != null ? r.cost_per_unit : 1;
+      const holdingProfit = r.holding_profit != null ? r.holding_profit : 0;
+      fundMapForSearch[r.fund_code] = {
+        fund_key: r.fund_key,
+        fund_name: r.fund_name,
+        sectors,
+      };
+      fundMapForHolding[r.fund_code] = {
+        shares: (holdingUnits || 0) * (costPerUnit || 1),
+        holding_units: holdingUnits || 0,
+        cost_per_unit: costPerUnit || 1,
+        holding_profit: holdingProfit || 0,
+      };
+    }
 
-            return {
-              code: h.fund_code,
-              name: h.fund_name,
-              holding_amount: Math.round(currentValue * 100) / 100,
-              est_amount: Math.round(estAmount * 100) / 100,
-              est_change_pct: dailyReturn,
-              actual_amount: Math.round(actualAmount * 100) / 100,
-              actual_change_pct: dailyReturn,
-              cumulative: Math.round(cumulative * 100) / 100
-            };
-          }
-        } catch (e) {
-          console.error(`获取基金 ${h.fund_code} 行情失败:`, e.message);
-        }
+    // 同时获取 fund123 和天天基金数据（一主一备，与前端保持一致）
+    let rows = [];
+    try {
+      const [resultRows123, resultRowsTiantian] = await Promise.all([
+        fundQuotes.searchCode(fundMapForSearch).catch(() => []),
+        tiantianFund.searchCodeTiantian(fundMapForSearch).catch(() => []),
+      ]);
+      const byCode123 = new Map(resultRows123.map((r) => [r[0], r]));
+      const byCodeTT = new Map(resultRowsTiantian.map((r) => [r[0], r]));
+      const merged = [];
+      for (const code of Object.keys(fundMapForSearch)) {
+        const r123 = byCode123.get(code);
+        const rTT = byCodeTT.get(code);
+        // [code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo]
+        const name = (r123 && r123[1]) || (rTT && rTT[1]) || (fundMapForSearch[code] && fundMapForSearch[code].fund_name) || `基金${code}`;
+        // fund123 为主、天天为备
+        const netValuePrimary = r123 && r123[3] && String(r123[3]).trim() !== '—' ? r123[3] : null;
+        const netValueBackup = rTT && rTT[3] && String(rTT[3]).trim() !== '—' ? rTT[3] : null;
+        let netValue = netValuePrimary || netValueBackup || '—';
+        // 仅天天有数据时用 估值(今日) 作为净值
+        if (!r123 && rTT && rTT[8] && String(rTT[8]).trim()) netValue = rTT[8];
+        const nowTimeVal = (r123 && r123[2] && String(r123[2]).trim() !== '—') ? r123[2] : (rTT && rTT[2] && String(rTT[2]).trim() !== '—' ? rTT[2] : null);
+        const nowTime = nowTimeVal || '—';
+        const forecastVal = (r123 && r123[4] && String(r123[4]).trim() !== 'N/A') ? r123[4] : (rTT && rTT[4] && String(rTT[4]).trim() !== 'N/A' ? rTT[4] : null);
+        const forecastGrowth = forecastVal || 'N/A';
+        const dayGrowthPrimary = r123 && r123[5] && String(r123[5]).trim() !== '—' ? r123[5] : null;
+        const dayGrowthBackup = rTT && rTT[5] && String(rTT[5]).trim() !== '—' ? rTT[5] : null;
+        const dayOfGrowth = dayGrowthPrimary || dayGrowthBackup || '—';
+        const consecutiveInfo = (r123 && r123[6] && String(r123[6]).trim() !== '—' ? r123[6] : null) || '—';
+        const monthlyInfo = (r123 && r123[7] && String(r123[7]).trim() !== '—' ? r123[7] : null) || '—';
+        const estimateDate = (r123 && r123[8] && String(r123[8]).trim()) ? String(r123[8]).trim() : '';
+        merged.push([code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo, estimateDate]);
+      }
+      // 按估值涨幅降序排序
+      merged.sort((a, b) => {
+        const pctA = a[4] === 'N/A' ? -99 : parseFloat(String(a[4]).replace('%', ''));
+        const pctB = b[4] === 'N/A' ? -99 : parseFloat(String(b[4]).replace('%', ''));
+        return pctB - pctA;
+      });
+      rows = fundQuotes.buildPositionRows(merged, fundMapForHolding);
+    } catch (err) {
+      console.error('获取基金行情失败:', err);
+    }
 
-        // 获取行情失败时返回基础信息
-        return {
-          code: h.fund_code,
-          name: h.fund_name,
-          holding_amount: 0,
-          est_amount: 0,
-          est_change_pct: 0,
-          actual_amount: 0,
-          actual_change_pct: 0,
-          cumulative: 0
-        };
-      })
-    );
+    // 转换为 API 响应格式
+    const holdingsData = rows.map(row => ({
+      code: row.code,
+      name: row.name,
+      holding_amount: row.holding,
+      est_amount: row.estAmount,
+      est_change_pct: row.estPct,
+      actual_amount: row.actualAmount,
+      actual_change_pct: row.actualPct,
+      cumulative: row.cumulative,
+      // 额外字段供参考
+      net_value: row.netValue,
+      update_time: row.nowTime,
+      day_growth: row.dayOfGrowth,
+      holding_units: row.holding_units,
+      cost_per_unit: row.cost_per_unit,
+      estimate_date: row.estimateDate,
+      net_value_date: row.netValueDate
+    }));
 
     res.json({
       success: true,
@@ -299,14 +376,12 @@ router.get('/portfolio/holdings', apiKeyAuth, async (req, res) => {
 
 /**
  * @api {get} /api/v1/public/fund/detail 获取基金详细信息
- * @apiDescription 获取基金的完整信息，包括名称、实时行情、历史净值、重仓股、各周期涨幅等
+ * @apiDescription 获取基金的实时行情和基本信息
  * @apiParam {String} code 基金代码（必填）
- * @apiParam {Number} [history_days=365] 历史净值天数（最大365）
  */
 router.get('/fund/detail', apiKeyAuth, async (req, res) => {
   try {
     const code = String(req.query.code || '').trim();
-    const historyDays = Math.min(parseInt(req.query.history_days) || 365, 365);
 
     if (!code) {
       return res.status(400).json({
@@ -315,95 +390,71 @@ router.get('/fund/detail', apiKeyAuth, async (req, res) => {
       });
     }
 
-    // 并行获取所有数据
-    const [quote, history, holdings] = await Promise.all([
-      // 获取实时行情（包含名称）
-      fundQuotes.getFundQuote(code).catch(() => null),
-      // 获取历史净值
-      fundQuotes.getFundHistory(code, historyDays).catch(() => []),
-      // 获取重仓股
-      fundHoldings.getFundHoldings(code).catch(() => [])
-    ]);
+    // 使用 searchOneCode 获取基金实时行情
+    const fundData = { fund_key: code, fund_name: '' };
+    const row = await fundQuotes.searchOneCode(code, fundData, []);
 
-    if (!quote) {
+    if (!row || row[3] === '—') {
       return res.status(404).json({
         error: 'not_found',
         message: '未找到该基金的信息'
       });
     }
 
-    // 计算历史涨幅统计
-    const historyStats = history.length > 0 ? {
-      total_records: history.length,
-      first_date: history[0]?.date,
-      last_date: history[history.length - 1]?.date,
-      max_nav: Math.max(...history.map(h => h.nav || 0)),
-      min_nav: Math.min(...history.filter(h => h.nav > 0).map(h => h.nav || Infinity)),
-      avg_daily_return: history.reduce((sum, h) => sum + (h.dailyReturn || 0), 0) / history.length
-    } : null;
+    // [code, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo, estimateDate]
+    const [, name, nowTime, netValue, forecastGrowth, dayOfGrowth, consecutiveInfo, monthlyInfo, estimateDate] = row;
 
-    // 计算近期涨幅（最近1月、3月、6月、1年）
-    const calculatePeriodReturn = (days) => {
-      if (history.length < days) return null;
-      const recent = history.slice(-days);
-      const firstNav = recent[0]?.nav;
-      const lastNav = recent[recent.length - 1]?.nav;
-      if (!firstNav || !lastNav) return null;
-      return ((lastNav - firstNav) / firstNav * 100).toFixed(2);
-    };
+    // 解析净值
+    let nav = null;
+    let navDate = '';
+    try {
+      const parts = String(netValue).split('(');
+      nav = parseFloat(parts[0]) || null;
+      navDate = (parts[1] || '').replace(')', '').trim();
+    } catch (e) {}
+
+    // 解析涨跌幅
+    let dailyReturn = null;
+    try {
+      dailyReturn = parseFloat(String(dayOfGrowth).replace('%', '')) || null;
+    } catch (e) {}
+
+    // 解析预估涨跌幅
+    let estReturn = null;
+    try {
+      estReturn = parseFloat(String(forecastGrowth).replace('%', '')) || null;
+    } catch (e) {}
 
     res.json({
       success: true,
       data: {
-        // 基本信息
         fund_code: code,
-        fund_name: quote.name,
-        fund_type: quote.type || '未知类型',
+        fund_name: name.replace(/<[^>]+>/g, '').trim(),
 
         // 实时行情
         current_quote: {
-          nav: quote.nav,
-          acc_nav: quote.accNav,
-          daily_return: quote.dailyReturn,
-          date: quote.date,
-          update_time: quote.updateTime
+          nav: nav,
+          nav_date: navDate,
+          daily_return: dailyReturn,
+          estimate_return: estReturn,
+          update_time: nowTime,
+          estimate_date: estimateDate
         },
 
-        // 历史净值
-        history: {
-          records: history.map(item => ({
-            date: item.date,
-            nav: item.nav,
-            acc_nav: item.accNav,
-            daily_return: item.dailyReturn
-          })),
-          stats: historyStats,
-          period_returns: {
-            '1_week': calculatePeriodReturn(7),
-            '1_month': calculatePeriodReturn(30),
-            '3_months': calculatePeriodReturn(90),
-            '6_months': calculatePeriodReturn(180),
-            '1_year': calculatePeriodReturn(365)
-          }
+        // 统计数据
+        stats: {
+          consecutive_info: consecutiveInfo,
+          monthly_info: monthlyInfo
         },
 
-        // 重仓股
-        holdings: holdings.map(item => ({
-          stock_code: item.code,
-          stock_name: item.name,
-          weight: item.weight,
-          change_percent: item.change
-        })),
-
-        // 更新时间
         update_time: new Date().toISOString()
       }
     });
   } catch (error) {
-    console.error('获取基金详细信息失败:', error);
+    console.error('获取基金详情失败:', error);
     res.status(500).json({
       error: 'internal_error',
-      message: '获取基金详细信息失败'
+      message: '获取基金详情失败'
     });
   }
 });

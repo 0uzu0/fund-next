@@ -43,7 +43,7 @@ X-API-Key: your-api-key-here
 
 ### 1. 持仓总览
 
-获取用户持仓的总体概况。
+获取用户持仓的总体概况。数据与前端页面实时同步。
 
 ```
 GET /portfolio/summary
@@ -71,8 +71,8 @@ GET /portfolio/summary
 | 字段 | 说明 | 计算公式 |
 |------|------|----------|
 | `total_value` | 总持仓金额 | Σ(持有份额 × 净值) |
-| `today_est_change` | 今日预估涨跌 | Σ(持仓金额 × 日涨跌幅%) |
-| `today_actual_change` | 今日实际涨跌 | 同预估涨跌（已结算部分） |
+| `today_est_change` | 今日预估涨跌 | Σ(持仓金额 × 预估涨跌幅%) |
+| `today_actual_change` | 今日实际涨跌 | Σ(持仓金额 × 日涨跌幅%，根据显示规则) |
 | `holding_profit` | 持仓收益 | Σ(持有份额 × (净值 - 成本)) |
 | `cumulative_profit` | 累计收益 | 持仓收益 + 清仓基金历史收益 |
 
@@ -80,7 +80,7 @@ GET /portfolio/summary
 
 ### 2. 持仓基金列表
 
-获取用户持有的基金列表及详细数据。
+获取用户持有的基金列表及详细数据。数据与前端页面实时同步，使用相同的数据源和计算逻辑。
 
 ```
 GET /portfolio/holdings
@@ -102,7 +102,14 @@ GET /portfolio/holdings
       "est_change_pct": 1.23,
       "actual_amount": 615.00,
       "actual_change_pct": 1.23,
-      "cumulative": 5000.00
+      "cumulative": 5000.00,
+      "net_value": "1.2345(01-15)",
+      "update_time": "14:32",
+      "day_growth": "1.23%",
+      "holding_units": 10000,
+      "cost_per_unit": 1.1000,
+      "estimate_date": "2024-01-15",
+      "net_value_date": "01-15"
     }
   ]
 }
@@ -112,18 +119,27 @@ GET /portfolio/holdings
 
 | 字段 | 说明 | 计算公式 |
 |------|------|----------|
+| `code` | 基金代码 | - |
+| `name` | 基金名称 | - |
 | `holding_amount` | 持仓金额 | 持有份额 × 净值 |
-| `est_amount` | 预估收益 | 持仓金额 × 日涨跌幅% |
-| `est_change_pct` | 预估涨跌(%) | 日涨跌幅 |
-| `actual_amount` | 实际收益 | 同预估收益（已结算部分） |
-| `actual_change_pct` | 实际涨跌(%) | 日涨跌幅 |
-| `cumulative` | 持仓收益 | 持有份额 × (净值 - 成本) |
+| `est_amount` | 预估收益 | 持仓金额 × 预估涨跌幅% |
+| `est_change_pct` | 预估涨跌(%) | 来自数据源 |
+| `actual_amount` | 实际收益 | 持仓金额 × 日涨跌幅%（根据显示规则） |
+| `actual_change_pct` | 实际涨跌(%) | 日涨跌幅（根据显示规则） |
+| `cumulative` | 持仓收益 | 持有份额 × (净值 - 成本单价) |
+| `net_value` | 单位净值（含日期） | 例："1.2345(01-15)" |
+| `update_time` | 估值更新时间 | 例："14:32" |
+| `day_growth` | 日涨跌幅 | 例："1.23%" |
+| `holding_units` | 持有份额 | - |
+| `cost_per_unit` | 成本单价 | - |
+| `estimate_date` | 估值日期 | YYYY-MM-DD |
+| `net_value_date` | 净值日期 | MM-DD |
 
 ---
 
 ### 3. 基金详情
 
-获取基金的完整信息，包括行情、历史净值、重仓股等。
+获取基金的实时行情和基本信息。
 
 ```
 GET /fund/detail?code={基金代码}
@@ -134,7 +150,6 @@ GET /fund/detail?code={基金代码}
 | 参数 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|
 | code | String | 是 | - | 基金代码 |
-| history_days | Number | 否 | 365 | 历史净值天数（最大365） |
 
 **响应示例**：
 
@@ -144,43 +159,37 @@ GET /fund/detail?code={基金代码}
   "data": {
     "fund_code": "000001",
     "fund_name": "华夏成长混合",
-    "fund_type": "混合型",
     "current_quote": {
       "nav": 1.8000,
-      "acc_nav": 2.5000,
+      "nav_date": "01-15",
       "daily_return": 1.23,
-      "date": "2024-01-15",
-      "update_time": "2024-01-15 15:00:00"
+      "estimate_return": 1.25,
+      "update_time": "14:32",
+      "estimate_date": "2024-01-15"
     },
-    "history": {
-      "records": [...],
-      "stats": {
-        "total_records": 250,
-        "first_date": "2023-01-15",
-        "last_date": "2024-01-15",
-        "max_nav": 1.8500,
-        "min_nav": 1.4500
-      },
-      "period_returns": {
-        "1_week": "1.23",
-        "1_month": "3.45",
-        "3_months": "8.90",
-        "6_months": "15.20",
-        "1_year": "25.60"
-      }
+    "stats": {
+      "consecutive_info": "3天 2.5%",
+      "monthly_info": "15/20 5.2%"
     },
-    "holdings": [
-      {
-        "stock_code": "600519",
-        "stock_name": "贵州茅台",
-        "weight": 9.5,
-        "change_percent": 1.2
-      }
-    ],
     "update_time": "2024-01-15T09:30:00.000Z"
   }
 }
 ```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `fund_code` | 基金代码 |
+| `fund_name` | 基金名称 |
+| `current_quote.nav` | 单位净值 |
+| `current_quote.nav_date` | 净值日期 (MM-DD) |
+| `current_quote.daily_return` | 日涨跌幅(%) |
+| `current_quote.estimate_return` | 预估涨跌幅(%) |
+| `current_quote.update_time` | 估值更新时间 |
+| `current_quote.estimate_date` | 估值日期 |
+| `stats.consecutive_info` | 连涨/跌信息 |
+| `stats.monthly_info` | 近30天统计 |
 
 ---
 
@@ -253,8 +262,8 @@ GET /market/precious-metals
 | 指标 | 计算公式 |
 |------|----------|
 | 持仓金额 | 持有份额 × 单位净值 |
-| 预估收益 | 持仓金额 × 日涨跌幅% |
-| 实际收益 | 同预估收益（已结算部分） |
+| 预估收益 | 持仓金额 × 预估涨跌幅% |
+| 实际收益 | 持仓金额 × 日涨跌幅%（根据显示规则） |
 | 持仓收益 | 持有份额 × (净值 - 成本单价) |
 | 累计收益 | 持仓收益 + 清仓基金历史收益 |
 
@@ -277,6 +286,15 @@ GET /market/precious-metals
 ---
 
 ## 变更日志
+
+### 2024-03-02
+- `/portfolio/holdings` 接口数据与前端实时同步
+  - 使用与前端相同的数据源（fund123 + 天天基金）
+  - 使用相同的计算逻辑（`searchCode` + `buildPositionRows`）
+  - 实际收益/涨跌遵循相同的显示规则
+  - 新增字段：`net_value`, `update_time`, `day_growth`, `holding_units`, `cost_per_unit`, `estimate_date`, `net_value_date`
+- `/portfolio/summary` 接口同样使用前端一致的数据源和计算逻辑
+- `/fund/detail` 接口简化，移除历史净值和重仓股（当前版本暂不支持）
 
 ### 2024-01-15
 - 重构持仓接口，拆分为总览和列表两个独立接口
