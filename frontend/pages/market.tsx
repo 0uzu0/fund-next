@@ -49,6 +49,15 @@ function Market() {
     if (auth) fetchKx();
   }, [auth, fetchKx]);
 
+  // 自动刷新：每30秒刷新一次数据
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      fetchKx();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth, fetchKx]);
+
   if (!auth) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

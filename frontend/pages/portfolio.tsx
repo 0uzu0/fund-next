@@ -279,6 +279,16 @@ export default function Portfolio() {
     if (auth && !loading) fetchData();
   }, [auth, refreshing]);
 
+  // 自动刷新：每30秒刷新一次数据
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      fetchData();
+      if (selectedGroupId != null) fetchWatchlist();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth, selectedGroupId, dataSource]);
+
   const fetchWatchlist = useCallback((overrideSource?: 'fund123' | 'tiantian', noCache?: boolean) => {
     if (selectedGroupId == null) return;
     const source = overrideSource ?? dataSource;

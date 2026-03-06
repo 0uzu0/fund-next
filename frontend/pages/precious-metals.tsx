@@ -121,6 +121,16 @@ function PreciousMetals() {
     }
   }, [auth]);
 
+  // 自动刷新：每30秒刷新一次数据
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      loadRealTime();
+      loadOneDay();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth]);
+
   const refresh = () => {
     clearCache('api/gold');
     loadRealTime();

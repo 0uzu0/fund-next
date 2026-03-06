@@ -162,6 +162,19 @@ function Sectors() {
     }
   }, [auth, tab, loadSectorList]);
 
+  // 自动刷新：每30秒刷新一次数据
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      if (tab === 'sectors') {
+        loadSectors();
+      } else {
+        loadSectorList();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth, tab]);
+
   const refresh = () => {
     if (tab === 'sectors') {
       clearCache('api/sectors');

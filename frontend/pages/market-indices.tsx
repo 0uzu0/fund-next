@@ -87,6 +87,16 @@ function MarketIndices() {
     }
   }, [auth, loadIndices, loadCharts]);
 
+  // 自动刷新：每30秒刷新一次数据
+  useEffect(() => {
+    if (!auth) return;
+    const interval = setInterval(() => {
+      loadIndices();
+      loadCharts();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [auth]);
+
   if (!auth) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
