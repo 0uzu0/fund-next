@@ -3,31 +3,28 @@ const nextConfig = {
   output: 'export',
   assetPrefix: '',
   reactStrictMode: true,
-  
+
   // 性能优化配置
   compress: true,
   poweredByHeader: false,
-  
+
   // 图片优化
   images: {
     unoptimized: true, // 静态导出需要禁用图片优化
   },
-  
+
   // 实验性功能：优化编译
   // 注意：optimizeCss 需要安装 critters 包，且与静态导出不兼容，已禁用
   // experimental: {
   //   optimizeCss: true, // 优化 CSS
   // },
-  
+
   // 生产环境优化
   swcMinify: true, // 使用 SWC 压缩（更快）
-  
-  // 开发时把 /api 代理到 Express 后端，避免 404（生产由 Express 同源托管则无需代理）
-  async rewrites() {
-    return [
-      { source: '/api/:path*', destination: 'http://localhost:8311/api/:path*' },
-    ];
-  },
+
+  // 注意：静态导出(output: 'export')时 rewrites 不生效
+  // 开发时使用独立后端，生产环境前后端一体(Express托管静态文件)，都使用同源API
+  // 如需开发时代理，请使用环境变量控制
   
   webpack: (config, { isServer, dev }) => {
     config.resolve.fallback = { fs: false, path: false, net: false, tls: false };
