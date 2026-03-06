@@ -50,23 +50,19 @@ export default function ApiKeysManagement() {
     // 检查登录状态
     apiGet<{ username?: string; is_admin?: boolean; user_id?: number }>(getApiBase() + '/api/auth/me', { cache: { ttl: 0 } })
       .then((data) => {
-        console.log('Auth check success:', data);
         setAuth({ username: data.username ?? '', is_admin: data.is_admin });
         // 保存当前用户ID用于自动绑定
         if (data.user_id) {
           setCurrentUserId(data.user_id);
         }
         if (!data.is_admin) {
-          console.log('User is not admin, redirecting...');
           router.replace('/portfolio');
         } else {
           // 管理员认证通过后立即加载数据
-          console.log('Admin verified, loading data...');
           loadData();
         }
       })
-      .catch((err) => {
-        console.error('Auth check failed:', err);
+      .catch(() => {
         router.replace('/login?redirect=/admin/api-keys');
       });
   }, [router]);
@@ -74,7 +70,6 @@ export default function ApiKeysManagement() {
   const loadData = async () => {
     try {
       setLoading(true);
-      console.log('Loading API keys and users...');
       // 清除缓存确保获取最新数据
       clearCache('/api/admin/api-keys');
       clearCache('/api/admin/users');
@@ -90,15 +85,11 @@ export default function ApiKeysManagement() {
         )
       ]);
 
-      console.log('API Keys response:', keysRes);
-      console.log('Users response:', usersRes);
-      
       // 处理 API Keys 响应 - 后端返回 { success: true, data: [...], pagination: {...} }
       if (keysRes && (keysRes.success || Array.isArray(keysRes.data))) {
         const keys = keysRes.data || keysRes.rows || [];
         setApiKeys(Array.isArray(keys) ? keys : []);
       } else {
-        console.error('获取 API Keys 失败:', keysRes?.message || '未知错误', keysRes);
         setApiKeys([]);
       }
 
@@ -106,11 +97,9 @@ export default function ApiKeysManagement() {
       if (usersRes && (usersRes.success || Array.isArray(usersRes.data)) && usersRes.data) {
         setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
       } else {
-        console.error('获取用户列表失败:', usersRes?.message, usersRes);
         setUsers([]);
       }
     } catch (error: any) {
-      console.error('加载数据失败:', error);
       // 如果是 401 未授权，不显示 toast，让认证逻辑处理跳转
       if (error?.status === 401 || error?.message?.includes('unauthorized')) {
         return;

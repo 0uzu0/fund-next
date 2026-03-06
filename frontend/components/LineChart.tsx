@@ -135,13 +135,13 @@ export default function LineChart({
         })}
         {/* X 轴刻度 */}
         {[0, Math.floor(n / 2), n - 1].filter((i) => i >= 0 && i < n).map((i) => (
-          <text key={i} x={getX(i)} y={dim.h - 4} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fill="var(--text-dim)" style={{ fontSize: 'var(--font-size-sm)' }}>
+          <text key={`x-${i}`} x={getX(i)} y={dim.h - 4} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} fill="var(--text-dim)" style={{ fontSize: 'var(--font-size-sm)' }}>
             {labels[i]}
           </text>
         ))}
         {/* Y 轴刻度 */}
         {[minY, (minY + maxY) / 2, maxY].map((v, i) => (
-          <text key={i} x={PAD.left - 6} y={getY(v) + 4} textAnchor="end" fill="var(--text-dim)" style={{ fontSize: 'var(--font-size-sm)' }}>
+          <text key={`y-${i}`} x={PAD.left - 6} y={getY(v) + 4} textAnchor="end" fill="var(--text-dim)" style={{ fontSize: 'var(--font-size-sm)' }}>
             {valueFormat(v)}
           </text>
         ))}

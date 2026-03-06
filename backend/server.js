@@ -66,10 +66,8 @@ app.use(
   })
 );
 
-// 请求日志中间件（调试用）
+// 请求日志中间件
 app.use((req, res, next) => {
-  // 记录所有请求，帮助调试
-  console.log(`[Request] ${req.method} ${req.url} from ${req.ip}`);
   next();
 });
 
@@ -77,11 +75,9 @@ app.use((req, res, next) => {
 const frontendBuild = fs.existsSync(path.join(__dirname, 'frontend/out'))
   ? path.join(__dirname, 'frontend/out')
   : path.join(__dirname, '../frontend/out');
-console.log(`[Server] Frontend build path: ${frontendBuild}`);
 
 // 最先处理根路径和登录页面 - 避免被其他中间件拦截
 app.get('/', (req, res) => {
-  console.log(`[ROOT] Serving index.html`);
   const filePath = path.join(frontendBuild, 'index.html');
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
@@ -90,7 +86,6 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
-  console.log(`[LOGIN] Serving login.html`);
   const filePath = path.join(frontendBuild, 'login.html');
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
@@ -190,7 +185,6 @@ app.get('*', (req, res, next) => {
 
   const base = req.path.slice(1).replace(/\//g, path.sep);
   const htmlPath = path.join(frontendBuild, base + '.html');
-  console.log(`[Page] ${req.path} -> ${htmlPath}, exists: ${fs.existsSync(htmlPath)}`);
 
   if (fs.existsSync(htmlPath)) {
     return res.sendFile(htmlPath);
@@ -199,9 +193,7 @@ app.get('*', (req, res, next) => {
 });
 
 initDb().then(() => {
-  // 输出数据库路径信息（调试用）
   const db = require('./db');
-  console.log(`[Server] Database initialized, path: ${process.env.DB_PATH || (process.env.NODE_ENV === 'production' ? '/app/data/fund_data.db' : './cache/fund_data.db')}`);
 
   cache.prune();
   setInterval(() => cache.prune(), 60 * 60 * 1000);

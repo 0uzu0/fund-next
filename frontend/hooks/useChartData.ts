@@ -101,7 +101,6 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         }
       }
     } catch (e) {
-      console.warn('[sessionStorage] 读取缓存数据失败:', e);
       // 清除损坏的数据
       sessionStorage.removeItem(CHART_DATA_STORAGE_KEY);
       sessionStorage.removeItem(CHART_DATA_TIMESTAMP_KEY);
@@ -121,9 +120,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
       
       sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
       sessionStorage.setItem(CHART_DATA_TIMESTAMP_KEY, timestamp.toString());
-      console.log('[sessionStorage] 已保存', Object.keys(dataMap).length, '只基金的图表数据到浏览器缓存');
     } catch (e) {
-      console.warn('[sessionStorage] 保存缓存数据失败:', e);
       // 如果存储空间不足，尝试清除旧数据
       try {
         sessionStorage.removeItem(CHART_DATA_STORAGE_KEY);
@@ -135,7 +132,7 @@ export function useChartData(auth: { username: string } | null, dataSource?: str
         sessionStorage.setItem(CHART_DATA_STORAGE_KEY, JSON.stringify(compressedData));
         sessionStorage.setItem(CHART_DATA_TIMESTAMP_KEY, Date.now().toString());
       } catch (e2) {
-        console.error('[sessionStorage] 无法保存数据，存储空间可能不足:', e2);
+        // 存储空间不足
       }
     }
   }, []);

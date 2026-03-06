@@ -473,27 +473,20 @@ router.post('/api/fund/groups/:id/funds', loginRequired, async (req, res) => {
       // 优先使用前端提供的基金名称（来自联想搜索）
       let name = providedName || `基金${code}`;
       try {
-        console.log(`[添加基金] 正在获取基金 ${code} 信息...`);
         const info = await fund123.searchFund(code);
         if (info) {
-          console.log(`[添加基金] 基金 ${code} 搜索成功:`, info);
           if (info.fund_key != null && String(info.fund_key).trim() !== '') key = String(info.fund_key).trim();
           // 如果前端没有提供名称，才使用搜索结果的名称
           if (!providedName && info.fund_name != null && String(info.fund_name).trim() !== '') {
             name = String(info.fund_name).trim();
           }
-        } else {
-          console.log(`[添加基金] 基金 ${code} 搜索返回 null，使用${providedName ? '前端提供的' : '默认'}名称`);
         }
       } catch (e) {
-        console.error(`[添加基金] 基金 ${code} 搜索异常:`, e.message);
+        // 搜索失败时使用默认值
       }
-      console.log(`[添加基金] 准备插入数据库: code=${code}, key=${key}, name=${name}`);
       db.prepare(
         `INSERT INTO user_funds (user_id, fund_code, fund_key, fund_name, is_hold, shares, sectors, holding_units, cost_per_unit) VALUES (?, ?, ?, ?, 0, 0, '[]', 0, 1)`
       ).run(userId, code, key, name);
-    } else {
-      console.log(`[添加基金] 基金 ${code} 已存在，跳过插入`);
     }
     const gid = req.params.id;
     const group = db.prepare('SELECT id, fund_codes, sort_order FROM fund_groups WHERE user_id = ? AND id = ?').get(userId, gid);

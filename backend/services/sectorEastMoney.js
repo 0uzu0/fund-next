@@ -60,7 +60,6 @@ async function fetchSectorsList() {
   
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[板块] 开始请求东方财富 API (尝试 ${attempt}/${maxRetries})...`);
       
       const { data } = await axios.get('https://push2.eastmoney.com/api/qt/clist/get', {
         params: {
@@ -95,10 +94,7 @@ async function fetchSectorsList() {
         },
       });
       
-      console.log('[板块] API 响应状态:', data ? '有数据' : '无数据');
-      
       if (!data || !data.data || !data.data.diff) {
-        console.error('概念板块数据格式异常:', JSON.stringify(data).substring(0, 500));
         lastError = new Error('数据格式异常');
         // 如果数据格式异常，等待后重试
         if (attempt < maxRetries) {
@@ -107,8 +103,6 @@ async function fetchSectorsList() {
         }
         return [];
       }
-      
-      console.log('[板块] 获取到', data.data.diff.length, '条数据');
       
       const sectors = data.data.diff.map((bk) => {
         const ratio = bk.f3 != null ? String(bk.f3) : '0';
@@ -135,15 +129,12 @@ async function fetchSectorsList() {
       
       return sectors;
     } catch (e) {
-      console.error(`[板块] 请求失败 (尝试 ${attempt}/${maxRetries}):`, e.message);
       lastError = e;
       if (attempt < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
       }
     }
   }
-  
-  console.error('[板块] 所有重试均失败:', lastError?.message);
   return [];
 }
 

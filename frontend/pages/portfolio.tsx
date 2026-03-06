@@ -1291,7 +1291,7 @@ export default function Portfolio() {
                             const fillTop = Math.min(y0, y1, baselineY);
                             const fillBottom = Math.max(y0, y1, baselineY);
                             return (
-                              <g key={i}>
+                              <g key={`seg-${i}`}>
                                 {/* 区域填充 */}
                                 <polygon
                                   points={`${x0},${fillBottom} ${x0},${y0} ${x1},${y1} ${x1},${fillBottom}`}
@@ -1444,7 +1444,7 @@ export default function Portfolio() {
                           const pixelY = (svgRect.top - containerRect.top) + tickY * scaleY;
                           return (
                             <div
-                              key={idx}
+                              key={`yl-${idx}`}
                               style={{
                                 position: 'absolute',
                                 left: `${pixelX}px`,
