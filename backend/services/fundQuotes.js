@@ -204,9 +204,10 @@ function buildPositionRows(resultRows, fundMap) {
       dayGrowth = parseFloat(String(dayGrowthStr).replace(/[\s%]/g, '')) || 0;
     }
 
+    // positionValue = 当前净值下的持仓金额（若净值为今日则=今日持仓金额）
     const positionValue = holdingUnits * netValue;
     const estAmount = (positionValue * estimatedGrowth) / 100;
-    
+
     // 实际收益和涨跌显示规则（与前端 shouldShowActualData 保持一致）：
     // - 净值日期是今天：显示（今天净值已发布）
     // - 净值日期是昨天：交易日9:30前显示，9:30后不显示（等今天净值）
@@ -217,12 +218,12 @@ function buildPositionRows(resultRows, fundMap) {
       const minutes = now.getMinutes();
       return hours > 9 || (hours === 9 && minutes >= 30);
     };
-    
+
     const isTradingDay = () => {
       const day = new Date().getDay();
       return day !== 0 && day !== 6; // 0=周日, 6=周六
     };
-    
+
     let shouldShowActual = false;
     if (netValueDate === today) {
       shouldShowActual = true;
@@ -234,8 +235,14 @@ function buildPositionRows(resultRows, fundMap) {
         shouldShowActual = true;
       }
     }
-    
-    const actualAmount = shouldShowActual ? (positionValue * dayGrowth) / 100 : 0;
+
+    // 实际收益 = 昨日持仓金额 × 日涨跌幅（不能再用今日持仓金额乘一次，否则等于嵌套）
+    // 今日持仓 = 昨日持仓 × (1 + dayGrowth/100)，故 昨日持仓 = 今日持仓 / (1 + dayGrowth/100)
+    // 实际收益 = 昨日持仓 × dayGrowth/100 = positionValue * dayGrowth / (100 + dayGrowth)
+    const denominator = 100 + dayGrowth;
+    const actualAmount = shouldShowActual && denominator !== 0
+      ? (positionValue * dayGrowth) / denominator
+      : 0;
     const actualPct = shouldShowActual ? dayGrowth : 0;
     // 持仓收益 = 持有份额 × (净值 - 成本单价)
     const cumulative = holdingUnits * (netValue - costPerUnit);
