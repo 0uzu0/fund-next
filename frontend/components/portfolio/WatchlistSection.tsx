@@ -13,10 +13,10 @@ type WatchlistSectionProps = {
   isEmpty: boolean;
   sort: WatchlistSortState;
   onSortClick: (col: number) => void;
-  pageSize: 10 | 20 | 30;
+  pageSize: 15 | 30 | 45;
   page: number;
   totalPages: number;
-  onPageSizeChange: (v: 10 | 20 | 30) => void;
+  onPageSizeChange: (v: 15 | 30 | 45) => void;
   onPageChange: (page: number) => void;
   addInput: string;
   onAddInputChange: (v: string) => void;
@@ -229,7 +229,7 @@ export default function WatchlistSection({
                 <td style={{ fontFamily: 'var(--font-mono)' }} title={((r.monthlyInfo == null || r.monthlyInfo === '') && tiantianNoDataTitle) || undefined}>{r.monthlyInfo != null && r.monthlyInfo !== '' ? String(r.monthlyInfo) : '—'}</td>
                 <td>
                   {selectedGroupId !== null && isDefaultGroup ? (
-                    <button type="button" className="btn btn-success" style={{ padding: '6px 12px' }} onClick={() => onEditHolding(r)}>修改持仓</button>
+                    <button type="button" className="btn btn-info" style={{ padding: '6px 12px' }} onClick={() => onEditHolding(r)}>修改持仓</button>
                   ) : (
                     <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', color: 'var(--gh-danger-fg)' }} onClick={() => onRemoveFromGroup(r.code)}>删除</button>
                   )}
@@ -243,12 +243,12 @@ export default function WatchlistSection({
         <span style={{ color: 'var(--text-dim)' }}>共{totalCount}条</span>
         <select
           value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value) as 10 | 20 | 30)}
+          onChange={(e) => onPageSizeChange(Number(e.target.value) as 15 | 30 | 45)}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
         >
-          <option value={10}>10条/页</option>
-          <option value={20}>20条/页</option>
+          <option value={15}>15条/页</option>
           <option value={30}>30条/页</option>
+          <option value={45}>45条/页</option>
         </select>
         <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>上一页</button>
         <span style={{ minWidth: 80, textAlign: 'center' }}>第{page}/{totalPages}页</span>

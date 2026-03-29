@@ -10,13 +10,14 @@ type HoldingTableProps = {
   isEmpty: boolean;
   sort: HoldingSortState;
   onSortClick: (col: number) => void;
-  pageSize: 10 | 20 | 30;
+  pageSize: 15 | 30 | 45;
   page: number;
   totalPages: number;
-  onPageSizeChange: (v: 10 | 20 | 30) => void;
+  onPageSizeChange: (v: 15 | 30 | 45) => void;
   onPageChange: (page: number) => void;
   hideSensitiveValues: boolean;
   onRowDetail: (row: HoldingRow) => void;
+  onEditHolding?: (row: HoldingRow) => void;
 };
 
 const COLS = [
@@ -26,6 +27,7 @@ const COLS = [
   { key: 5, label: '实际收益' },
   { key: 6, label: '实际涨跌' },
   { key: 7, label: '持仓收益' },
+  { key: 8, label: '操作' },
 ] as const;
 
 export default function HoldingTable({
@@ -41,6 +43,7 @@ export default function HoldingTable({
   onPageChange,
   hideSensitiveValues,
   onRowDetail,
+  onEditHolding,
 }: HoldingTableProps) {
   return (
     <div>
@@ -98,6 +101,16 @@ export default function HoldingTable({
                 }</td>
                 <td className={toNum(r.actualPct) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : (shouldShowActualData(r.netValueDate) && toNum(r.actualPct) !== 0 ? formatPct(r.actualPct) : '—')}</td>
                 <td className={toNum(r.cumulative) >= 0 ? 'positive' : 'negative'}>{hideSensitiveValues ? '****' : formatMoney(r.cumulative)}</td>
+                <td style={{ textAlign: 'center' }}>
+                  {onEditHolding && (
+                    <button
+                      type="button"
+                      className="btn btn-info"
+                      style={{ padding: '6px 12px' }}
+                      onClick={() => onEditHolding(r)}
+                    >修改持仓</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -107,12 +120,12 @@ export default function HoldingTable({
         <span style={{ color: 'var(--text-dim)' }}>共{totalCount}条</span>
         <select
           value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value) as 10 | 20 | 30)}
+          onChange={(e) => onPageSizeChange(Number(e.target.value) as 15 | 30 | 45)}
           style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--gh-bg-primary)', color: 'var(--text-main)', fontSize: 'var(--font-size-sm)' }}
         >
-          <option value={10}>10条/页</option>
-          <option value={20}>20条/页</option>
+          <option value={15}>15条/页</option>
           <option value={30}>30条/页</option>
+          <option value={45}>45条/页</option>
         </select>
         <button type="button" className="btn btn-secondary" disabled={page <= 1} onClick={() => onPageChange(Math.max(1, page - 1))}>上一页</button>
         <span style={{ minWidth: 80, textAlign: 'center' }}>第{page}/{totalPages}页</span>

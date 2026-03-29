@@ -121,10 +121,10 @@ export default function Portfolio() {
   const { sort: holdingSort, handleSort: onHoldingSortClick } = useTableSort();
   const { sort: watchlistSort, handleSort: onWatchlistSortClick } = useTableSort();
   // 持有基金分页：每页条数、当前页
-  const [holdingPageSize, setHoldingPageSize] = useState<10 | 20 | 30>(10);
+  const [holdingPageSize, setHoldingPageSize] = useState<15 | 30 | 45>(15);
   const [holdingPage, setHoldingPage] = useState(1);
   // 自选基金分页：每页条数、当前页
-  const [watchlistPageSize, setWatchlistPageSize] = useState<10 | 20 | 30>(10);
+  const [watchlistPageSize, setWatchlistPageSize] = useState<15 | 30 | 45>(15);
   const [watchlistPage, setWatchlistPage] = useState(1);
 
   useEffect(() => {
@@ -1619,6 +1619,7 @@ export default function Portfolio() {
             onPageChange={setHoldingPage}
             hideSensitiveValues={hideSensitiveValues}
             onRowDetail={setDetailRow}
+            onEditHolding={openEditHolding}
           />
           </section>
 
